@@ -48,6 +48,10 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
     else {
       // Normally we create a new adyen client.
       // You can configure only one of live/test so don't initialize AdyenClient if keys are blank
+      //
+      // @todo artfulrobot: So is the assumption that we don't have details
+      // (password) in place for both live and test? WHY can you only configure
+      // one of live/test?
       if (!empty($this->getXApiKey())) {
         $this->client = new \Adyen\Client();
         $this->setAPIParams();
@@ -63,6 +67,8 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
   }
 
   /**
+   * @todo artfulrobot: what is this?
+   *
    * @return string
    */
   public function getURLPrefix() {
@@ -85,7 +91,8 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
   }
 
   private function getExtraConfig() {
-    return json_decode($this->_paymentProcessor['signature'] ?? NULL, TRUE);
+    $parsed = json_decode($this->_paymentProcessor['signature'] ?? NULL, TRUE);
+    return $parsed ?? [];
   }
 
   /**
@@ -105,17 +112,19 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
   /**
    * This function checks to see if we have the right config values.
    *
+   * @todo artfulrobot: the code in this function will ALWAYS return NULL
+   *
    * @return null|string
    *   The error message if any.
    */
   public function checkConfig() {
-    $error = [];
-    if (!empty($error)) {
-      return implode('<p>', $error);
-    }
-    else {
-      return NULL;
-    }
+    // $error = [];
+    // if (!empty($error)) {
+    //   return implode('<p>', $error);
+    // }
+    // else {
+    //   return NULL;
+    // }
   }
 
   /**
@@ -420,7 +429,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
     }
     $propertyBag = $this->beginDoPayment($propertyBag);
 
-    $propertyBag = $this->setStatusPaymentPending($propertyBag);
+    $this->setStatusPaymentPending($propertyBag);
     $propertyBag = $this->getTokenParameter('adyenPaymentReference', $propertyBag, TRUE);
     $this->setPaymentProcessorOrderID($propertyBag->getCustomProperty('adyenPaymentReference'));
     // For contribution workflow we have a contributionId so we can set parameters directly.

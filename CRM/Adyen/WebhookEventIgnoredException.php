@@ -2,6 +2,8 @@
 /**
  * @file
  * Exception for when an event in a webhook cannot be processed.
+ *
+ * @deprecated
  */
 class CRM_Adyen_WebhookEventIgnoredException extends \Exception {
 

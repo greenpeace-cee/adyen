@@ -84,7 +84,6 @@ function adyen_civicrm_entityTypes(&$entityTypes) {
   _adyen_civix_civicrm_entityTypes($entityTypes);
 }
 
-
 /**
  * Implements hook_civicrm_check().
  *

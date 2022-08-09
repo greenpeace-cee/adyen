@@ -12,6 +12,8 @@
 use CRM_Adyen_ExtensionUtil as E;
 
 /**
+ * This class describes a webhook configured at Adyen.
+ *
  * Class CRM_Adyen_Webhook
  */
 class CRM_Adyen_Webhook {

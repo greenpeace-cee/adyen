@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<menu>
+  <item>
+    <path>civicrm/adyen-checkout-demo</path>
+    <page_callback>CRM_Adyen_Page_AdyenCheckoutDemo</page_callback>
+    <title>AdyenCheckoutDemo</title>
+    <access_arguments>access CiviCRM</access_arguments>
+  </item>
+</menu>

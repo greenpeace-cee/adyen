@@ -24,12 +24,13 @@
   </classloader>
   <civix>
     <namespace>CRM/Adyen</namespace>
-    <format>22.05.0</format>
+    <format>22.05.2</format>
   </civix>
   <requires>
     <ext>mjwshared</ext>
   </requires>
   <mixins>
     <mixin>mgd-php@1.0.0</mixin>
+    <mixin>menu-xml@1.0.0</mixin>
   </mixins>
 </extension>
