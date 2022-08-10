@@ -155,7 +155,6 @@ class CRM_Core_Payment_AdyenIPN {
         // because we filter out events we don't need, there may not be any
         // records to record.
         \Civi\Api4\PaymentprocessorWebhook::save(FALSE)
-        ->setCheckPermissions(FALSE) // Remove line when minversion>=5.29
         ->setRecords($records)
         ->setDefaults(['payment_processor_id' => $this->getPaymentProcessor()->getID(), 'created_date' => 'now'])
         ->execute();

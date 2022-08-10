@@ -20,11 +20,11 @@ use Civi\Test\CiviEnvBuilder;
  *
  * @group headless
  */
-class CRM_Core_Payment_AdyenIPNTest extends \PHPUnit\Framework\TestCase implements HeadlessInterface, HookInterface, TransactionalInterface {
+class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements HeadlessInterface, HookInterface, TransactionalInterface {
 
 
   /** @var array holds the data for the test mode processor */
-  public array $test_mode_payment_processor;
+  public array $testModePaymentProcessorConfig;
 
   /**
    * Setup used when HeadlessInterface is implemented.
@@ -47,7 +47,7 @@ class CRM_Core_Payment_AdyenIPNTest extends \PHPUnit\Framework\TestCase implemen
   public function setUp():void {
     parent::setUp();
 
-    $this->test_mode_payment_processor = \Civi\Api4\PaymentProcessor::save(FALSE)
+    $this->testModePaymentProcessorConfig = \Civi\Api4\PaymentProcessor::save(FALSE)
     ->setReload(TRUE)
     ->setDefaults([
       'payment_processor_type_id:name' => "Adyen",
@@ -91,6 +91,8 @@ class CRM_Core_Payment_AdyenIPNTest extends \PHPUnit\Framework\TestCase implemen
       ],
     ])
     ->execute()->first();
+
+    $this->testModePaymentProcessorObject = \Civi\Payment\System::singleton()->getByProcessor($this->testModePaymentProcessorConfig);
   }
 
   public function tearDown():void {
@@ -98,10 +100,42 @@ class CRM_Core_Payment_AdyenIPNTest extends \PHPUnit\Framework\TestCase implemen
   }
 
   /**
-   * Test that a successful AUTHORISED webhook results in a completed contribution.
+   * Test that an event with an unknown eventCode is safely ignored.
+   */
+  public function testIgnoredEventType():void {
+    $eventData = $this->loadFixtureData('webhook-ignored-type.json');
+    $handler = new \Civi\Adyen\WebhookEventHandler($eventData);
+    $result = $handler->run();
+    $this->assertTrue($result->ok);
+    $this->assertEquals('Event ignored (normal - we do not process "SOME_NON_REQUIRED_TYPE" events)', $result->message);
+  }
+
+  /**
+   * Test that a successful AUTHORISED webhook results in a Pending contribution.
    */
   public function testAuthorisedSuccess():void {
+    $eventData = $this->loadFixtureData('webhook-authorised.json');
+    $handler = new \Civi\Adyen\WebhookEventHandler($eventData);
+    $result = $handler->run();
+    $this->assertInstanceOf(stdClass::class, $result);
+    $this->assertTrue($result->ok);
+    $this->assertNull($result->exception);
+    $this->assertEquals(1, preg_match('/^OK\. Contribution created with ID: (\d+)$/', $result->message, $matches));
 
+    // Load the contribution.
+    $cn = \Civi\Api4\Contribution::get(FALSE)
+    ->addSelect('id', 'contribution_status_id:name')
+    ->addWhere('id', '=', $matches[1])
+    ->execute()->single();
+    $this->assertEquals('Pending', $cn['contribution_status_id:name']);
+  }
+
+  protected function loadFixtureData(string $filename) :array {
+    $data = json_decode(file_get_contents(__DIR__ . '/fixtures/' . $filename), TRUE);
+    if (!$data) {
+      throw new \InvalidArgumentException("Failed to load fixture '$filename");
+    }
+    return $data;
   }
 
 }

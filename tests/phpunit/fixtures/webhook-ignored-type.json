@@ -1,0 +1,12 @@
+{
+  "additionalData": {
+  },
+  "amount": {
+  },
+  "eventCode": "SOME_NON_REQUIRED_TYPE",
+  "eventDate": "2022-08-09T16:36:59+02:00",
+  "merchantAccountCode": "DummyAccount",
+  "merchantReference": "civi-mock-ref-1",
+  "success": "true"
+}
+

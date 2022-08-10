@@ -48,7 +48,7 @@ class WebhookEventHandler {
   /**
    * Create a new handler.
    */
-  public function __construct(array $eventData) :void {
+  public function __construct(array $eventData) {
     if (empty($eventData['eventCode'])) {
       throw new \InvalidArgumentException("Adyen events must contain a 'eventCode' key holding the event type.");
     }
@@ -70,6 +70,7 @@ class WebhookEventHandler {
       switch ($this->eventData['eventCode']) {
       case 'AUTHORISATION':
         $return->message = $this->processAuthorisationEvent();
+        break;
 
       default:
         throw new WebhookEventIgnoredException(ts('Event ignored (normal - we do not process "%1" events)', [1 => $this->eventData['eventCode']]));
@@ -120,12 +121,12 @@ class WebhookEventHandler {
    * Sets $this->contactID
    */
   public function identifyContact() {
-    $event = $this->event;
+    $event = $this->eventData;
     $email = $event['additionalData']['shopperEmail'] ?? NULL;
     //  [shopperName] => [first name=Ivan, infix=null, last name=Velasquez, gender=null]
-    preg_match('/\[first name=([^,]*)/', $event['additionalData']['shopperName'], $firstName);
+    preg_match('/\[first name=([^,]*)/', $event['additionalData']['shopperName'] ?? '', $firstName);
     $firstName = $firstName[1] ?? NULL;
-    preg_match('/\last name=([^,]*)/', $event['additionalData']['shopperName'], $lastName);
+    preg_match('/\last name=([^,]*)/', $event['additionalData']['shopperName'] ?? '' ?? '', $lastName);
     $lastName = $lastName[1] ?? NULL;
 
     $contact = Contact::get(FALSE)

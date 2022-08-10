@@ -58,14 +58,18 @@ Further thoughts:
 
 - I'm none the wiser on what recurring data I would see, or how it would be stored.
 
-- I need a way to make payments and set up recurs that follows the same pattern as whatever GP are using, but on my test account.
+- I need a way to make payments and set up recurs that follows the same pattern as whatever GP are using, but on my test account - done at <https://adyen.artfulrobot.uk/civicrm/adyen-checkout-demo>
 
 - Hookable processing makes sense here, e.g. getorcreate
 
 ## Tasks
 
-- set up tests on existing functionality
-- research how iATS takes payments.
+- ✔ set up tests on existing functionality
+- ✔ research how iATS takes payments.
+- Find out what data to reliably expect. e.g. shopper name missing in my test, shopper email only for cards.
+- Ask Patrick for some real-ish data of one offs and recurs.
+- Determine what the flows are, re autocapture/manual capture
+- Design claiming payments on time, handling responses.
 
 ## Research: iATS
 
