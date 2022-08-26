@@ -7,13 +7,13 @@ flowchart TD
 
 al(Acquire lock)
 al-->findCrs
-findCrs("Find ContributionRecurs<br>(In Progress, Adyen, <br>Next Scheduled >= today) ")
+findCrs("Find ContributionRecurs<br>(In Progress, Adyen, Active, <br>Next Scheduled >= today) ")
 findCrs --> eachCR
 
 subgraph eachCR [Each CR]
   beginTrans1("Begin Transaction")
-  beginTrans1-->cnCreate1("Create new pending contribution<br>(use template, possibly repeattransaction)")
   cnCreate1-->updateCr1("Update Next Scheduled date")
+  beginTrans1-->cnCreate1("Create new pending contribution<br>(use template, possibly repeattransaction)")
   updateCr1-->commitTrans1("Commit Transaction")
 end
 
