@@ -208,23 +208,12 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
       if ($repeat === 'nothing') {
         $this->assertEquals(0, count($newPending), "Expected nothing to happen if we repeated, but something happened!");
       }
+      elseif ($repeat === 'no_op_warning') {
+        $this->assertArrayHasKey($this->crID, $newPending, "Expected that a Contribution ID of 0 was returned for the ContributionRecur key $this->crID but " . count($newPending) . " contributions returned without that key.");
+        $this->assertEquals(0, $newPending[$this->crID], "Expected a zero Contribution ID is returned.");
+      }
       else {
-        // $repeat is a date of the 2nd payment.
-        $this->assertArrayHasKey($this->crID, $newPending, "Expected that a Contribution was created for the ContributionRecur but " . count($newPending) . " contributions created.");
-        $newContributionID = $newPending[$this->crID];
-        $this->assertNotEquals($this->cn1ID, $newContributionID, "Should be new contribution");
-
-        $order = civicrm_api3('Order', 'get', ['id' => $newContributionID, 'sequential' => 1])['values'][0] ?? FALSE;
-        $this->assertIsArray($order, 'Failed to load Order for the new contribution');
-        $expectations = [
-          'contact_id'            => $this->contactID,
-          'total_amount'          => '1.23',
-          'contribution_status'   => 'Pending',
-          'is_test'               => 1,
-          'contribution_recur_id' => $this->crID,
-          'financial_type_id'     => 1,
-          'trxn_id'               => "CiviCRM-cr{$this->crID}-" . $repeat
-        ];
+        throw new \InvalidArgumentException("'$repeat' is not one of nothing|no_op_warning; this is a bug in the test case code.");
       }
     }
     else {
@@ -252,7 +241,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
         $today, 'Cancelled', []
       ],
       'two due payments' => [
-        $lastMonth, 'In Progress', ['receive_date' => $lastMonth], $thisMonth
+        $lastMonth, 'In Progress', ['receive_date' => $lastMonth], 'no_op_warning'
       ],
     ];
 

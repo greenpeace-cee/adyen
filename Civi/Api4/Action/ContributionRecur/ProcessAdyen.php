@@ -38,7 +38,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   /**
    * Generate Pending contributions from Adyen ContributionRecur records.
    *
-   * @return array of created contribution IDs, keyed by ContributionRecur ID.
+   * @return array keyed by ContributionRecur ID of created contribution IDs (or zero meaning one needs to be created but is waiting on another Pending Contribution). 
    */
   public function generatePendingContributions(): array {
     $dueRecurs = ContributionRecur::get(FALSE)
@@ -49,6 +49,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       ->addWhere('is_test', 'IN', [0, 1])
       ->execute();
     $results = [];
+
     foreach ($dueRecurs as $recur) {
       // Use a transaction to ensure that the next_sched_contribution_date is only updated
       // on successful creation of a Contribution. That way we don’t miss a contribution if
@@ -82,9 +83,16 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       throw new CRM_Core_Exception("getTemplateContribution failed fro ContributionRecur $cr[id]");
     }
     $cnStatus = CRM_Contribute_BAO_Contribution::buildOptions('contribution_status_id', 'validate')[$cn['contribution_status_id']];
-    if (!in_array($cnStatus, ['Template', 'Completed'])) {
+    switch ($cnStatus) {
+    case "Template":
+    case "Completed":
+      break;
+    case "Pending":
+      \Civi::log()->warning("[adyen]: ContributionRecur $cr[id] is due for another Contribution ($cnDate), but there is already a pending one (id:$cn[id], $cn[receive_date]). We will not create another pending contribution until that one is Completed.");
+      return 0;
+    default:
       // @todo implement some handling.
-      throw new CRM_Core_Exception("Failed to find a suitable contribution to copy to create next scheduled contribution on ContributionRecur $cr[id]");
+      throw new CRM_Core_Exception("Failed to find a suitable contribution to copy to create next scheduled contribution on ContributionRecur $cr[id]. getTemplateContribution returned one in status '$cnStatus'");
     }
 
     // @see docs/discussion/index.md
