@@ -7,6 +7,7 @@ use Civi\Test\TransactionalInterface;
 use Civi\Test\CiviEnvBuilder;
 use Civi\Api4\Contact;
 use Civi\Api4\ContributionRecur;
+use Civi\Api4\Action\ContributionRecur\ProcessAdyen;
 
 /**
  * Tests the ContributionRecur.processAdyen API4 action.
@@ -158,32 +159,112 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
   }
 
   /**
+   * @dataProvider dataForGeneratePendingContributions
+   */
+  public function testGeneratePendingContributions(
+    string $next_sched_contribution_date,
+    string $crStatus,
+    array $expected,
+    string $repeat = 'nothing'): void {
+    // Adjust fixture
+    ContributionRecur::update(FALSE)
+      ->addValue('contribution_status_id:name', $crStatus)
+      ->addValue('next_sched_contribution_date', $next_sched_contribution_date)
+      ->addWhere('id', '=', $this->crID)
+      ->execute();
+
+    $apiObject = new ProcessAdyen('ContributionRecur', 'processAdyen');
+    $apiObject->setCheckPermissions(FALSE);
+    $newPending = $apiObject->generatePendingContributions();
+    $this->assertIsArray($newPending);
+
+    if ($expected) {
+      // We expect a contribution to have been created.
+      $this->assertArrayHasKey($this->crID, $newPending, "Expected that a Contribution was created for the ContributionRecur but " . count($newPending) . " contributions created.");
+      $newContributionID = $newPending[$this->crID];
+      $this->assertNotEquals($this->cn1ID, $newContributionID, "Should be new contribution");
+
+      $order = civicrm_api3('Order', 'get', ['id' => $newContributionID, 'sequential' => 1])['values'][0] ?? FALSE;
+      $this->assertIsArray($order, 'Failed to load Order for the new contribution');
+      $expectations = [
+        'contact_id'            => $this->contactID,
+        'total_amount'          => '1.23',
+        'contribution_status'   => 'Pending',
+        'is_test'               => 1,
+        'contribution_recur_id' => $this->crID,
+        'financial_type_id'     => 1,
+        'trxn_id'               => "CiviCRM-cr{$this->crID}-" . date('Y-m-d'),
+      ];
+      foreach ($expectations as $key => $value) {
+        $this->assertArrayHasKey($key, $order);
+        $this->assertEquals($value, $order[$key]);
+      }
+
+      // Repeat the call
+      $apiObject = new ProcessAdyen('ContributionRecur', 'processAdyen');
+      $apiObject->setCheckPermissions(FALSE);
+      $newPending = $apiObject->generatePendingContributions();
+      $this->assertIsArray($newPending);
+      if ($repeat === 'nothing') {
+        $this->assertEquals(0, count($newPending), "Expected nothing to happen if we repeated, but something happened!");
+      }
+      else {
+        // $repeat is a date of the 2nd payment.
+        $this->assertArrayHasKey($this->crID, $newPending, "Expected that a Contribution was created for the ContributionRecur but " . count($newPending) . " contributions created.");
+        $newContributionID = $newPending[$this->crID];
+        $this->assertNotEquals($this->cn1ID, $newContributionID, "Should be new contribution");
+
+        $order = civicrm_api3('Order', 'get', ['id' => $newContributionID, 'sequential' => 1])['values'][0] ?? FALSE;
+        $this->assertIsArray($order, 'Failed to load Order for the new contribution');
+        $expectations = [
+          'contact_id'            => $this->contactID,
+          'total_amount'          => '1.23',
+          'contribution_status'   => 'Pending',
+          'is_test'               => 1,
+          'contribution_recur_id' => $this->crID,
+          'financial_type_id'     => 1,
+          'trxn_id'               => "CiviCRM-cr{$this->crID}-" . $repeat
+        ];
+      }
+    }
+    else {
+      $this->assertEquals(0, count($newPending), 'We did not expect any contributions to be created');
+    }
+  }
+  public function dataForGeneratePendingContributions() {
+    $today = date('Y-m-d 00:00:00');
+    $yesterday = date('Y-m-d 00:00:00', strtotime('yesterday'));
+
+    $thisMonth = date('Y-m-01');
+    $lastMonth = date('Y-m-01', strtotime("$thisMonth - 1 month"));
+    
+    return [
+      'due payment' => [
+        $today, 'In Progress', ['receive_date' => $today]
+      ],
+      'no due payment' => [
+        'tomorrow', 'In Progress', []
+      ],
+      'over due payment' => [
+        $yesterday, 'In Progress', ['receive_date' => $yesterday]
+      ],
+      'due payment on cancelled' => [
+        $today, 'Cancelled', []
+      ],
+      'two due payments' => [
+        $lastMonth, 'In Progress', ['receive_date' => $lastMonth], $thisMonth
+      ],
+    ];
+
+  }
+  /**
+   * Adding a pending contribution when due.
    */
   public function testPrimaryFunction():void {
     $result = ContributionRecur::processAdyen(FALSE)
       ->execute()->getArrayCopy();
     $this->assertArrayHasKey('newPending', $result);
     $this->assertArrayHasKey($this->crID, $result['newPending'], "Expect that there is a new contribution created for the CR but none was.");
-    $newContributionID = $result['newPending'][$this->crID];
-    $this->assertNotEquals($this->cn1ID, $newContributionID, "Should be new contribution");
-
-    $order = civicrm_api3('Order', 'get', ['id' => $newContributionID, 'sequential' => 1])['values'][0] ?? FALSE;
-    $this->assertIsArray($order, 'Failed to load Order for the new contribution');
-    $expectations = [
-      'contact_id'            => $this->contactID,
-      'total_amount'          => '1.23',
-      'contribution_status'   => 'Pending',
-      'is_test'               => 1,
-      'contribution_recur_id' => $this->crID,
-      'financial_type_id'     => 1,
-      'trxn_id'               => "CiviCRM-cr{$this->crID}-" . date('Y-m-d'),
-      'receive_date'          => date('Y-m-d 00:00:00'),
-    ];
-    foreach ($expectations as $key => $value) {
-      $this->assertArrayHasKey($key, $order);
-      $this->assertEquals($value, $order[$key]);
-    }
-
   }
 
 }

@@ -45,7 +45,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       ->addWhere('payment_processor_id.payment_processor_type_id:name', '=', 'Adyen')
       ->addWhere('payment_processor_id.is_active', '=', true)
       ->addWhere('contribution_status_id:name', 'IN', ['In Progress', 'Overdue', 'Failing'])
-      ->addWhere('next_sched_contribution_date', '>=', 'today')
+      ->addWhere('next_sched_contribution_date', '<=', 'today')
       ->addWhere('is_test', 'IN', [0, 1])
       ->execute();
     $results = [];
