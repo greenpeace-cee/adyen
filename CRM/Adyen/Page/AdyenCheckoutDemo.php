@@ -30,10 +30,10 @@ class CRM_Adyen_Page_AdyenCheckoutDemo extends CRM_Core_Page {
         if ($adyenSessionID) {
           // We've been called as a callback.
           $params = [
-            'id' => $adyenSessionID,
+            'id'              => $adyenSessionID,
             'merchantAccount' => $ppObject->getMerchantAccount(),
-            'clientKey' => $ppObject->getClientKey(),
-            'redirectResult' => $_GET['redirectResult'] ?? '',
+            'clientKey'       => $ppObject->getClientKey(),
+            'redirectResult'  => $_GET['redirectResult'] ?? '',
           ];
           $this->assign('adyenSession', json_encode($params));
         }
@@ -48,15 +48,15 @@ class CRM_Adyen_Page_AdyenCheckoutDemo extends CRM_Core_Page {
 
           $service = new \Adyen\Service\Checkout($ppObject->client);
           $params = [
-            'amount' => [
+            'amount'          => [
               'currency' => "EUR",
-              'value' => 101
+              'value'    => 101
             ],
-            'countryCode' => 'GB',
+            'countryCode'     => 'GB',
             'merchantAccount' => $ppObject->getMerchantAccount(),
-            'reference' => 'CiviCRM-test-' . date('Ymdhis'),
-            'returnUrl' => \Civi::paths()->getUrl('civicrm/adyen-checkout-demo', 'absolute'),
-            'shopperEmail' => $emailAddress,
+            'reference'       => 'CiviCRM-test-' . date('Ymdhis'),
+            'returnUrl'       => \Civi::paths()->getUrl('civicrm/adyen-checkout-demo', 'absolute'),
+            'shopperEmail'    => $emailAddress,
           ];
           $sessionResult = $service->sessions($params);
           $this->assign('adyenSession', json_encode($sessionResult +
