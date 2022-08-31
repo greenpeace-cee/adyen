@@ -22,6 +22,11 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
   use CRM_Core_Payment_MJWTrait;
 
   /**
+   * How many failures before we fail the ContributionRecur?
+   */
+  public const MAX_FAILURES = 3;
+
+  /**
    * @var \Adyen\Client
    */
   public $client;
@@ -109,6 +114,44 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
     }
   }
 
+  /**
+   * Attempt to take a payment for a subscription.
+   *
+   * @see https://docs.adyen.com/online-payments/tokenization/create-and-use-tokens?tab=codeBlockpay_subscriptions_yjkfY_PHP_4
+   *
+   * @return array with keys: success (bool), pspReference (string), resultCode (string)
+   */
+  public function attemptPayment(array $contribution): array {
+
+    $service = new \Adyen\Service\Checkout($this->client);
+    $params = [
+      "amount" => [
+        "currency" => $contribution['currency'],
+        "value"    => $contribution['total_amount'],
+      ],
+      "reference" => $contribution['trxn_id'], // not sure about this.
+      "paymentMethod" => [
+        "type"                  => "scheme",
+        "storedPaymentMethodId" => "", // @todo we need the 'additionalData.recurring.recurringDetailReference' from the initial operation.
+      ],
+      // "returnUrl"             => "https://your-company.com/checkout/", // Surely this makes no sense in an API driven workflow?
+      "shopperInteraction"       => "ContAuth",
+      "recurringProcessingModel" => "Subscription",
+      "shopperReference"         => '', // @todo this will be set by the external system - we need a way to find out what it is.
+      'merchantAccount'          => $this->getMerchantAccount(),
+      'clientKey'                => $this->getClientKey(),
+    ];
+
+    $result = $service->payments($params);
+    if (($result['resultCode'] ?? '') === 'Authorized') {
+      // Looks good. The caller should store pspReference as a trxn id of some sort.
+      $result['success'] = TRUE;
+    }
+    else {
+      $result['success'] = FALSE;
+    }
+    return $result;
+  }
   /**
    * This function checks to see if we have the right config values.
    *

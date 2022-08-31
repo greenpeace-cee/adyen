@@ -159,6 +159,11 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
   }
 
   /**
+   * This tests the generatePendingContributions method, which is called
+   * internally by the ContributionRecur.ProcessAdyen API action.
+   *
+   * Testing it directly like this enables us to make more fine grained assertions.
+   *
    * @dataProvider dataForGeneratePendingContributions
    */
   public function testGeneratePendingContributions(

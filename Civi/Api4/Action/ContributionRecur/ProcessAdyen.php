@@ -2,8 +2,10 @@
 namespace Civi\Api4\Action\ContributionRecur;
 
 use Civi\Api4\ContributionRecur;
+use Civi\Api4\Contribution;
 use Civi\Api4\Generic\Result;
 use CRM_Core_Exception;
+use CRM_Core_Payment_Adyen;
 use CRM_Core_Transaction;
 use CRM_Contribute_BAO_ContributionRecur;
 use CRM_Contribute_BAO_Contribution;
@@ -99,7 +101,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     $repeattransactionParams = [
       'original_contribution_id' => $cn['id'],
       'is_email_receipt'         => FALSE, /* We don't want this happening, we’re creating a pending one. */
-      'trxn_id'                  => $this->determineTrxnID($cr, $cn, $cnStatus),
+      'trxn_id'                  => $this->determineTrxnID($cr),
       'receive_date'             => $cnDate,
     ];
     // The total_amount: normally the same as the last contribution, unless
@@ -120,9 +122,14 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   }
 
   /**
+   * Generate a unique transaction ID for a new contribution that belongs to a recur.
+   *
+   * This will be one of:
+   * - CiviCRM-cr12345-2022-08-31 (normally)
+   * - CiviCRM-cr12345-2022-08-31-2 (if the first and 2nd ones failed and we had to create a third)
    *
    */
-  public function determineTrxnID(array $cr, array $cn, string $cnStatus): string {
+  public function determineTrxnID(array $cr): string {
     // We don't have a trxn_id There should be only one for this CR and this date.
     // This will become the 'merchant identifier' at Adyen.
     $trxn_id = "CiviCRM-cr$cr[id]-" . date('Y-m-d');
@@ -148,7 +155,106 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   /**
    * Process Pending contributions using Adyen API.
    */
-  public function processPendingContributions() {
+  public function processPendingContributions(): array {
+    $contributions = Contribution::get()
+      ->addSelect('*', 'cr.payment_processor_id')
+      ->addJoin('ContributionRecur cr', 'INNER', NULL, [
+        ['cr.id', '=', 'contribution_recur_id'],
+        ['cr.contribution_status_id:name', 'IN', ['In Progress', 'Overdue', 'Failing']],
+        ['cr.payment_processor_id.payment_processor_type_id:name', '=', 'Adyen'],
+        ['cr.payment_processor_id.is_active', '=', TRUE],
+      ])
+      ->addJoin('Contact ct', 'INNER', NULL, [
+        ['contact_id', '=', 'ct.id'],
+        ['ct.is_deleted', '=', FALSE],
+        ['ct.is_deceased', '=', FALSE],
+      ])
+      ->addWhere('contribution_status_id:name', '=', 'Pending')
+      ->execute();
 
+    $results = [];
+    foreach ($contributions as $contribution) {
+      $results[$contribution['id']] = $this->processPendingContribution($contribution);
+    }
+    return $results;
+  }
+
+  /**
+   * Process a single contribution using Adyen API.
+   *
+   * @param array $contribution (must include cr.payment_processor_id)
+   */
+  public function processPendingContribution(array $contribution): bool {
+    $paymentProcessorID = $contribution['cr.payment_processor_id'];
+
+    /** @var CRM_Core_Payment_Adyen $paymentProcessor */
+    $paymentProcessor = \Civi\Payment\System::singleton()->getById($paymentProcessorID);
+    if (!($paymentProcessor instanceof CRM_Core_Payment_Adyen)) {
+      throw new \RuntimeException("processPendingContribution called with a contribution that is not attached to an Adyen payment processor. This is a bug!");
+    }
+
+    $result = $paymentProcessor->attemptPayment($contribution);
+    $returnValue = NULL;
+    if ($result['success'] ?? FALSE) {
+      // Payment successfully processed; either it is settled or at least authorised. IPNs are relied upon to update further.
+      // For our purposes, such a result means a successful, 'Completed' Contribution.
+
+      // Q. how to record it complete?
+      // A. add a Payment, with the PSP.
+      $paymentCreateParams = [
+        'contribution_id' => $contribution['id'],
+        'total_amount'    => $contribution['total_amount'],
+        'trxn_id'         => $result['pspReference'],
+        'trxn_date'       => date('Y-m-d H:i:s'),
+        'is_send_contribution_notification' => FALSE, /* @todo? */
+        // trxn_result_code ?
+        // order_reference ?
+      ];
+      $result = civicrm_api3('Payment', 'create', $paymentCreateParams);
+      $returnValue = TRUE;
+      $crUpdates = [
+        'failure_count'               => 0,
+        'contribution_status_id:name' => 'In Progress',
+        'failure_retry_date'          => NULL,
+      ];
+    }
+    else {
+      // Some failure.
+      $cr = ContributionRecur::get(FALSE)
+        ->addSelect('failure_count', 'contribution_status_id:name')
+        ->addWhere('id', '=', $contribution['contribution_recur_id'])
+        ->execute()->single();
+
+      $retriesLeft = max(0, CRM_Core_Payment_Adyen::MAX_FAILURES - $cr['failure_count'] - 1);
+
+      \Civi::log()->warning("[adyen] Failed attempting to take contribution $contribution[id] of $contribution[currency] $contribution[total_amount], ($retriesLeft retries left) got result:\n" . json_encode($result, JSON_PRETTY_PRINT));
+
+      // Mark this Contribution as failed.
+      Contribution::update(FALSE)
+        ->addWhere('id', '=', $contribution['id'])
+        ->addValue('contribution_status_id:name', 'Failed')
+        ->execute();
+
+      $crUpdates = [
+        'failure_count'               => $cr['failure_count'] + 1,
+        'contribution_status_id:name' => 'Failing',
+        'failure_retry_date'          => date('Y-m-d', strtotime('tomorrow')), // @todo implement other end
+      ];
+
+      if (!$retriesLeft) {
+        $crUpdates['contribution_status_id:name'] = 'Failed'; /* or cancelled? */
+        // Strictly, this is the date the contributor cancelled, but the only other date is end_date which is for successful completion.
+        $crUpdates['cancel_date'] = date('Y-m-d H:i:s');
+      }
+
+      $returnValue = FALSE;
+    }
+
+    ContributionRecur::update(FALSE)
+    ->addWhere('id', '=', $cr['id'])
+    ->setValues($crUpdates)
+    ->execute();
+
+    return $returnValue;
   }
 }
