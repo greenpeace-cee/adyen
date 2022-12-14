@@ -38,9 +38,9 @@ findCrs --> eachCR
 
 subgraph eachCR [Each CR]
   beginTrans1("Begin Transaction")
-  cnCreate1-->updateCr1("Update Next Scheduled date")
-  beginTrans1-->cnCreate1("Create new pending contribution<br>(use template, possibly repeattransaction)")
-  updateCr1-->commitTrans1("Commit Transaction")
+  beginTrans1-->updateCr1("Update Next Scheduled date")
+  updateCr1-->cnCreate1("Create new pending contribution<br>(use template, repeattransaction)")
+  cnCreate1-->commitTrans1("Commit Transaction")
 end
 
 eachCR --> findCns
