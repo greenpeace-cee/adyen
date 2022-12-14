@@ -27,7 +27,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     try {
       // todo can we do this or do we need to return an array of arrays?
       $result['newPending'] = $this->generatePendingContributions();
-      $this->processPendingContributions();
+      $result['contributionsProcessed'] = $this->processPendingContributions();
     }
     catch (\Exception $e) {
       $lock->release();
@@ -67,6 +67,9 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   /**
    * Generate Pending contributions for a specific ContributionRecur.
    *
+   * This is called from within a transaction so we expect that to be
+   * automatically rolled back if we throw an exception.
+   *
    * @return int The new contribution ID.
    */
   public function generatePendingContributionForRecur(array $cr): int {
@@ -92,7 +95,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     $cn = CRM_Contribute_BAO_ContributionRecur::getTemplateContribution($cr['id']);
     if (empty($cn)) {
       // @todo implement some handling.
-      throw new CRM_Core_Exception("getTemplateContribution failed fro ContributionRecur $cr[id]");
+      throw new CRM_Core_Exception("getTemplateContribution failed for ContributionRecur $cr[id]");
     }
     $cnStatus = CRM_Contribute_BAO_Contribution::buildOptions('contribution_status_id', 'validate')[$cn['contribution_status_id']];
     switch ($cnStatus) {
@@ -219,10 +222,10 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       // Q. how to record it complete?
       // A. add a Payment, with the PSP.
       $paymentCreateParams = [
-        'contribution_id' => $contribution['id'],
-        'total_amount'    => $contribution['total_amount'],
-        'trxn_id'         => $result['pspReference'],
-        'trxn_date'       => date('Y-m-d H:i:s'),
+        'contribution_id'                   => $contribution['id'],
+        'total_amount'                      => $contribution['total_amount'],
+        'trxn_id'                           => $result['pspReference'],
+        'trxn_date'                         => date('Y-m-d H:i:s'),
         'is_send_contribution_notification' => FALSE, /* @todo? */
         // trxn_result_code ?
         // order_reference ?
