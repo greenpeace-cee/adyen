@@ -1,6 +1,32 @@
 # Reference
 
-## How taking payments happens (plan)
+## Hook (Symfony event) `civi.recur.nextschedcontributiondatealter`
+
+Other extensions (more likely, *one* other extension) can listen for this event to take control over setting the `next_sched_contribution_date` for a recurring contribution.
+
+Your listener should look like this:
+
+```php
+<?php
+
+function mylistener(\Civi\Core\Event\GenericHookEvent $event) {
+  // Some process here decides what the new date should be.
+  // $event comes with:
+  // $event->originalDate          The current date that we will be updating.
+  // $event->newDate               The date that we will update it to.
+  // $event->frequency_interval    e.g. 1
+  // $event->frequency_unit        e.g. "month"
+  // $event->contribution_recur_id
+
+  // Example: jump over weekends, avoiding gotchas with daylight saving.
+  while (date('N', strtotime("$event->newDate 09:00:00")) > 5) {
+    $event->newDate = date('Y-m-d', strtotime("$event->newDate 09:00:00 + 1 day"));
+  }
+}
+
+```
+
+## How taking payments happens (plan) @todo update
 
 ```mermaid
 flowchart TD
