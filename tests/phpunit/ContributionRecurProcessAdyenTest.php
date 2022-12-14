@@ -7,6 +7,7 @@ use Civi\Test\TransactionalInterface;
 use Civi\Test\CiviEnvBuilder;
 use Civi\Api4\Contact;
 use Civi\Api4\ContributionRecur;
+use Civi\Api4\Contribution;
 use Civi\Api4\Action\ContributionRecur\ProcessAdyen;
 
 /**
@@ -70,6 +71,13 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
       ->apply();
   }
 
+  /**
+   * Creates an Adyen payment processor,
+   * a contact, a ContributionRecur with a completed Contribution, simulating entities
+   * created by existing outside processes.
+   *
+   * The contribution is a month ago, and the recur is due today.
+   */
   public function setUp():void {
     parent::setUp();
 
@@ -315,6 +323,24 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
       ->execute()->getArrayCopy();
     $this->assertArrayHasKey('newPending', $result);
     $this->assertArrayHasKey($this->crID, $result['newPending'], "Expect that there is a new contribution created for the CR but none was.");
+    $contrib = Contribution::get(FALSE)
+    ->addWhere('id', '=', $result['newPending'][$this->crID])
+    ->addWhere('is_test', 'IN', [0, 1])
+    ->addSelect('receive_date', 'contribution_status_id:name', 'total_amount', 'trxn_id', 'contribution_recur_id', 'invoice_id', 'invoice_number')
+    ->execute()->single();
+
+    $this->assertEquals($this->crID, $contrib['contribution_recur_id']);
+    $this->assertEquals('Pending', $contrib['contribution_status_id:name']);
+    $this->assertEquals(date('Y-m-d 00:00:00'), $contrib['receive_date']);
+    $this->assertEquals(1.23, $contrib['total_amount']);
+    $this->assertEquals("CiviCRM-cr{$this->crID}-" . date('Y-m-d'), $contrib['trxn_id']);
+    $this->assertEquals('', $contrib['invoice_id']); // machine
+    $this->assertEquals('', $contrib['invoice_number']); // human readable
+
+    // Call again, nothing should be generated.
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+    $this->assertArrayHasKey('newPending', $result);
+    $this->assertCount(0, $result['newPending']);
   }
 
 }

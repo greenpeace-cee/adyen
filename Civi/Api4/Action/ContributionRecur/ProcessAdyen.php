@@ -40,7 +40,8 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   /**
    * Generate Pending contributions from Adyen ContributionRecur records.
    *
-   * @return array keyed by ContributionRecur ID of created contribution IDs (or zero meaning one needs to be created but is waiting on another Pending Contribution). 
+   * @return array keyed by ContributionRecur ID of created contribution IDs
+   * (or zero meaning one needs to be created but is waiting on another Pending Contribution). 
    */
   public function generatePendingContributions(): array {
     $dueRecurs = ContributionRecur::get(FALSE)
@@ -166,20 +167,27 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
    */
   public function processPendingContributions(): array {
     $contributions = Contribution::get()
-      ->addSelect('*', 'cr.payment_processor_id')
-      ->addJoin('ContributionRecur AS cr', 'INNER', NULL,
-        ['cr.id', '=', 'contribution_recur_id'],
-        ['cr.contribution_status_id:name', 'IN', ['In Progress', 'Overdue', 'Failing']],
-        ['cr.payment_processor_id.is_active', '=', 1],
-        // ['cr.payment_processor_id.payment_processor_type_id:name', '=', '"Adyen"'],
-      )
-      ->addJoin('Contact AS ct', 'INNER', NULL,
-        ['contact_id', '=', 'ct.id'],
-        ['ct.is_deleted', '=', FALSE],
-        ['ct.is_deceased', '=', FALSE],
-      )
-      ->addWhere('contribution_status_id:name', '=', 'Pending')
-      ->execute();
+    ->addSelect('*', 'cr.payment_processor_id')
+    // The commented version did not work
+    // ->addJoin('ContributionRecur AS cr', 'INNER', NULL,
+    //   ['cr.id', '=', 'contribution_recur_id'],
+    //   ['cr.contribution_status_id:name', 'IN', ['In Progress', 'Overdue', 'Failing']],
+    //   ['cr.payment_processor_id.is_active', '=', 1],
+    //   ['cr.payment_processor_id.payment_processor_type_id:name', '=', '"Adyen"'],
+    // )
+    ->addJoin('ContributionRecur AS cr', 'INNER',
+      ['contribution_recur_id', '=', 'cr.id'],
+      ['cr.contribution_status_id:name', 'IN', ['In Progress', 'Overdue', 'Failing']],
+    )
+    ->addJoin('PaymentProcessor AS pp', 'INNER', ['cr.payment_processor_id', '=', 'pp.id'], ['pp.is_active', '=', 1])
+    ->addJoin('PaymentProcessorType AS ppt', 'INNER', ['pp.payment_processor_type_id', '=', 'ppt.id'], ['ppt.name', '=', '"Adyen"'])
+    ->addJoin('Contact AS ct', 'INNER', NULL,
+      ['contact_id', '=', 'ct.id'],
+      ['ct.is_deleted', '=', FALSE],
+      ['ct.is_deceased', '=', FALSE],
+    )
+    ->addWhere('contribution_status_id:name', '=', 'Pending')
+    ->execute();
 
     $results = [];
     foreach ($contributions as $contribution) {
