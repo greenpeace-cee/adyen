@@ -16,6 +16,7 @@ function mylistener(\Civi\Core\Event\GenericHookEvent $event) {
   // $event->newDate               The date that we will update it to.
   // $event->frequency_interval    e.g. 1
   // $event->frequency_unit        e.g. "month"
+  // $event->cycle_day             e.g. 1 or could be something awkward like 31
   // $event->contribution_recur_id
 
   // Example: jump over weekends, avoiding gotchas with daylight saving.

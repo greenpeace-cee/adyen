@@ -47,10 +47,20 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     $dueRecurs = ContributionRecur::get(FALSE)
       ->addWhere('payment_processor_id.payment_processor_type_id:name', '=', 'Adyen')
       ->addWhere('payment_processor_id.is_active', '=', true)
-      ->addWhere('contribution_status_id:name', 'IN', ['In Progress', 'Overdue', 'Failing'])
       ->addWhere('next_sched_contribution_date', '<=', 'today')
       ->addWhere('is_test', 'IN', [0, 1])
+      ->addClause(
+        'OR',
+        ['contribution_status_id:name', '=', 'In Progress'],
+        ['AND',
+          [
+            ['contribution_status_id:name', 'IN', ['Failing', 'Overdue']],
+            ['failure_retry_date', '<=', 'today']
+          ]
+        ])
+      // ->setDebug(TRUE)
       ->execute();
+    // print_r($dueRecurs->debug);
     $results = [];
 
     foreach ($dueRecurs as $recur) {
@@ -82,6 +92,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
         'newDate'               => date('Y-m-d H:i:s', strtotime("$cnDate + $cr[frequency_interval] $cr[frequency_unit]")),
         'frequency_interval'    => $cr['frequency_interval'],
         'frequency_unit'        => $cr['frequency_unit'],
+        'cycle_day'             => $cr['cycle_day'],
         'contribution_recur_id' => $cr['id'],
       ]);
     \Civi::dispatcher()->dispatch('civi.recur.nextschedcontributiondatealter', $event);

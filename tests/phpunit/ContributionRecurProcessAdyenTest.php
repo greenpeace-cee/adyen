@@ -136,13 +136,12 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     // CR is now due today.
     $dateOfFirstContribution = date('Y-m-d H:i:s', strtotime('today - 1 month'));
 
-    // @todo cycle_day
+    // @todo cycle_day ?
     $this->crID = ContributionRecur::create(FALSE)
       ->setValues([
         'contact_id'                   => $this->contactID,
         'amount'                       => '1.23',
         'currency'                     => 'EUR',
-        'contribution_status_id:name'  => 'In Progress',
         'financial_type_id'            => 1,
         'frequency_unit'               => 'month',
         'frequency_interval'           => 1,
