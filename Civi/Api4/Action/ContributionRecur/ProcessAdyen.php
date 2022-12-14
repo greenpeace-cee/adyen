@@ -72,7 +72,16 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     $cnDate = $cr['next_sched_contribution_date'];
 
     // Set the next collection date
-    $newNextCNDate = date('Y-m-d H:i:s', strtotime("$cnDate + $cr[frequency_interval] $cr[frequency_unit]"));
+    $event = \Civi\Core\Event\GenericHookEvent::create(
+      [
+        'originalDate'          => $cnDate,
+        'newDate'               => date('Y-m-d H:i:s', strtotime("$cnDate + $cr[frequency_interval] $cr[frequency_unit]")),
+        'frequency_interval'    => $cr['frequency_interval'],
+        'frequency_unit'        => $cr['frequency_unit'],
+        'contribution_recur_id' => $cr['id'],
+      ]);
+    \Civi::dispatcher()->dispatch('civi.recur.nextschedcontributiondatealter', $event);
+    $newNextCNDate = $event->newDate;
     ContributionRecur::update(FALSE)
       ->addValue('next_sched_contribution_date', $newNextCNDate)
       ->addWhere('id', '=', $cr['id'])
@@ -158,17 +167,17 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   public function processPendingContributions(): array {
     $contributions = Contribution::get()
       ->addSelect('*', 'cr.payment_processor_id')
-      ->addJoin('ContributionRecur cr', 'INNER', NULL, [
+      ->addJoin('ContributionRecur AS cr', 'INNER', NULL,
         ['cr.id', '=', 'contribution_recur_id'],
         ['cr.contribution_status_id:name', 'IN', ['In Progress', 'Overdue', 'Failing']],
-        ['cr.payment_processor_id.payment_processor_type_id:name', '=', 'Adyen'],
-        ['cr.payment_processor_id.is_active', '=', TRUE],
-      ])
-      ->addJoin('Contact ct', 'INNER', NULL, [
+        ['cr.payment_processor_id.is_active', '=', 1],
+        // ['cr.payment_processor_id.payment_processor_type_id:name', '=', '"Adyen"'],
+      )
+      ->addJoin('Contact AS ct', 'INNER', NULL,
         ['contact_id', '=', 'ct.id'],
         ['ct.is_deleted', '=', FALSE],
         ['ct.is_deceased', '=', FALSE],
-      ])
+      )
       ->addWhere('contribution_status_id:name', '=', 'Pending')
       ->execute();
 

@@ -23,7 +23,7 @@ use Civi\Api4\Action\ContributionRecur\ProcessAdyen;
  *
  * @group headless
  */
-class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements HeadlessInterface, HookInterface, TransactionalInterface {
+class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessInterface, HookInterface, TransactionalInterface {
 
 
   /** @var array holds the data for the test mode processor */
@@ -44,6 +44,14 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
    */
   protected int $cn1ID;
 
+
+  /**
+   * Holds an override date; if set then our listener on_civi_recur_nextschedcontributiondatealter
+   * will set the event's new date to this value.
+   */
+  protected ?string $overrideNextSchedDate;
+
+  protected bool $hookWasCalled = FALSE;
   /**
    * Setup used when HeadlessInterface is implemented.
    *
@@ -165,25 +173,43 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
    * Testing it directly like this enables us to make more fine grained assertions.
    *
    * @dataProvider dataForGeneratePendingContributions
+   *
+   * @var string $expectedNextSchedContributionDate
+   *    'unchanged' means same as $next_sched_contribution_date
+   *    '=2022-01-02' The = prefix means that we will set our overrideNextSchedDate to this date, and then expect it.
+   *    '2022-01-02' Expect this date, without using our hook override.
    */
   public function testGeneratePendingContributions(
     string $next_sched_contribution_date,
     string $crStatus,
     array $expected,
+    string $expectedNextSchedContributionDate = 'unchanged',
     string $repeat = 'nothing'): void {
+
     // Adjust fixture
+    $next_sched_contribution_date = date('Y-m-d 00:00:00', strtotime($next_sched_contribution_date));
     ContributionRecur::update(FALSE)
       ->addValue('contribution_status_id:name', $crStatus)
       ->addValue('next_sched_contribution_date', $next_sched_contribution_date)
       ->addWhere('id', '=', $this->crID)
       ->execute();
 
+    if ((substr($expectedNextSchedContributionDate, 0, 1) === '=')) {
+      $expectedNextSchedContributionDate = substr($expectedNextSchedContributionDate, 1);
+      $this->overrideNextSchedDate = $expectedNextSchedContributionDate;
+    }
+    else {
+      $this->overrideNextSchedDate = NULL;
+    }
+
+    $this->hookWasCalled = FALSE;
     $apiObject = new ProcessAdyen('ContributionRecur', 'processAdyen');
     $apiObject->setCheckPermissions(FALSE);
     $newPending = $apiObject->generatePendingContributions();
     $this->assertIsArray($newPending);
 
     if ($expected) {
+      $this->assertTrue($this->hookWasCalled, 'Hook should have been called.');
       // We expect a contribution to have been created.
       $this->assertArrayHasKey($this->crID, $newPending, "Expected that a Contribution was created for the ContributionRecur but " . count($newPending) . " contributions created.");
       $newContributionID = $newPending[$this->crID];
@@ -191,7 +217,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
 
       $order = civicrm_api3('Order', 'get', ['id' => $newContributionID, 'sequential' => 1])['values'][0] ?? FALSE;
       $this->assertIsArray($order, 'Failed to load Order for the new contribution');
-      $expectations = [
+      $expectations = $expected + [
         'contact_id'            => $this->contactID,
         'total_amount'          => '1.23',
         'contribution_status'   => 'Pending',
@@ -202,7 +228,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
       ];
       foreach ($expectations as $key => $value) {
         $this->assertArrayHasKey($key, $order);
-        $this->assertEquals($value, $order[$key]);
+        $this->assertEquals($value, $order[$key], "$key differs in contribution");
       }
 
       // Repeat the call
@@ -224,33 +250,63 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
     else {
       $this->assertEquals(0, count($newPending), 'We did not expect any contributions to be created');
     }
+
+    if ($expectedNextSchedContributionDate === 'unchanged') {
+      $expectedNextSchedContributionDate = $next_sched_contribution_date;
+    }
+    $next_sched_contribution_date = ContributionRecur::get(FALSE)
+      ->addWhere('id', '=', $this->crID)
+      ->addSelect('next_sched_contribution_date')
+      ->execute()->single()['next_sched_contribution_date'] ?? NULL;
+    $this->assertEquals(substr($expectedNextSchedContributionDate, 0, 10), substr($next_sched_contribution_date, 0, 10), "Next scheduled date was not as expected.");
   }
+
+  public function on_civi_recur_nextschedcontributiondatealter(\Civi\Core\Event\GenericHookEvent $event) {
+    $this->hookWasCalled = TRUE;
+    if (!empty($this->overrideNextSchedDate)) {
+      $event->newDate = $this->overrideNextSchedDate;
+    }
+  }
+
   public function dataForGeneratePendingContributions() {
     $today = date('Y-m-d 00:00:00');
     $yesterday = date('Y-m-d 00:00:00', strtotime('yesterday'));
 
     $thisMonth = date('Y-m-01');
-    $lastMonth = date('Y-m-01', strtotime("$thisMonth - 1 month"));
+    $lastMonth = date('Y-m-01 00:00:00', strtotime("$thisMonth - 1 month"));
     
     return [
-      'due payment' => [
-        $today, 'In Progress', ['receive_date' => $today]
+      'A due, In progress CR, should result in a contribution today.' => [
+        $today, 'In Progress', ['receive_date' => $today], 
+        date('Y-m-d 00:00:00', strtotime('today + 1 month'))
       ],
-      'no due payment' => [
+      'Default next_sched_contribution_date calculation' => [
+        $today, 'In Progress', ['receive_date' => $today], 
+        date('Y-m-d 00:00:00', strtotime('today + 1 month'))
+      ],
+      'Overridden next_sched_contribution_date calculation' => [
+        $today, 'In Progress', ['receive_date' => $today], 
+        '='. date('Y-m-d 00:00:00', strtotime('today + 6 weeks'))
+      ],
+      'An In progress CR due tomorrow, should not result in a new contribution.' => [
         'tomorrow', 'In Progress', []
       ],
-      'over due payment' => [
-        $yesterday, 'In Progress', ['receive_date' => $yesterday]
+      'An Overdue CR due yesterday, should result in a contribution yesterday' => [
+        $yesterday, 'In Progress', ['receive_date' => $yesterday],
+        date('Y-m-d 00:00:00', strtotime('yesterday + 1 month'))
       ],
-      'due payment on cancelled' => [
+      'An Cancelled CR should not result in a new contribution' => [
         $today, 'Cancelled', []
       ],
-      'two due payments' => [
-        $lastMonth, 'In Progress', ['receive_date' => $lastMonth], 'no_op_warning'
+      'An In progress CR with two payments due should ??? @todo' => [
+        $lastMonth, 'In Progress', ['receive_date' => $lastMonth], 
+        date('Y-m-d 00:00:00', strtotime("$lastMonth + 2 months")),
+        'no_op_warning'
       ],
     ];
 
   }
+
   /**
    * Adding a pending contribution when due.
    */
