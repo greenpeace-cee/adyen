@@ -24,13 +24,18 @@ Then you need to add a JSON-formatted configuration for the other parameters:
   "hmacKeys": {
     "0": "key1",
     "1": "key2"
-  }
+  },
+  "retryPolicy": [ "+1 day", ... ]
 }
 ```
 
 - The hmacKeys are used to validate webhooks.
 - The client Key is used for submitting payments via CiviCRM.
 - The URL prefix is only required for the live payment processor.
+- The `retryPolicy` is an array of the following strings to determine when and if failed payment attempts should be retried.
+   - `+<N> <period>` e.g. `+1 day` or `+2 weeks`: when to retry, relative to the last attempt
+   - `"skip"` means do not re-attempt this payment, wait for next cycle.
+   - `"fail"` means mark the recurring contribution Failed; no further attempts will be made now or in the future.
 
 ## Known issues
 

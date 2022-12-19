@@ -99,6 +99,14 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
     return $this->getExtraConfig()['hmacKeys'] ?? [];
   }
 
+  /**
+   * @return array
+   */
+  public function getRetryPolicy(): array {
+    $policy =  $this->getExtraConfig()['retryPolicy'] ?? ['skip'];
+    return $policy;
+  }
+
   private function getExtraConfig() {
     $parsed = json_decode($this->_paymentProcessor['signature'] ?? NULL, TRUE);
     return $parsed ?? [];

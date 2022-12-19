@@ -115,6 +115,9 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
           'hmacKeys'  => [
             'SECRET_HMAC_KEY_1',
             'SECRET_HMAC_KEY_2',
+          ],
+          'retryPolicy' => [
+            '+1 day', '+1 week', 'skip'
           ]
         ], JSON_PRETTY_PRINT),
       ],
@@ -242,7 +245,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
         'is_test'               => 1,
         'contribution_recur_id' => $this->crID,
         'financial_type_id'     => 1,
-        'trxn_id'               => "CiviCRM-cr{$this->crID}-" . date('Y-m-d'),
+        'invoice_id'            => "CiviCRM-cr{$this->crID}-" . date('Y-m-d'),
       ];
       foreach ($expectations as $key => $value) {
         $this->assertArrayHasKey($key, $order);
@@ -387,6 +390,154 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
 
     // Check that a contribution was created correctly
+    $this->assertFailedContribution($result);
+
+    // Check that the recur was updated correctly.
+    $recur = \Civi\Api4\ContributionRecur::get(FALSE)
+    ->addSelect('contribution_status_id:name', 'amount', 'failure_retry_date', 'failure_count', 'cancel_date')
+    ->addWhere('id', '=', $this->crID)
+    ->execute()->single();
+    $this->assertEquals([
+      'id' => $this->crID,
+      'contribution_status_id:name' => 'Failing',
+      'amount' => 1.23,
+      'failure_retry_date' => date('Y-m-d 00:00:00', strtotime('today +1 day')),
+      'failure_count' => 1,
+      'cancel_date' => NULL,
+    ], $recur);
+
+    // Call SUT again, nothing should be generated.
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+    $this->assertEquals(['newPending' => [], 'contributionsProcessed' => []], $result);
+  }
+
+  /**
+   * Test that when a 2nd payment fails, the next retry is in 1 week's
+   * time in accordance with the config (in setup())
+   *
+   */
+  public function testPaymentDueButFails2():void {
+
+    // Adjust the fixture to show one failure, retry due.
+    $recur = \Civi\Api4\ContributionRecur::update(FALSE)
+    ->addValue('failure_retry_date', date('Y-m-d 00:00:00'))
+    ->addValue('failure_count', 1)
+    ->addWhere('id', '=', $this->crID)
+    ->execute();
+
+    $this->mockAdyenCheckoutPayments(['resultCode' => 'Refused', 'pspReference' => NULL]);
+
+    // Call SUT
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+
+    // Check that a contribution was created correctly
+    $this->assertFailedContribution($result);
+
+    // Check that the recur was updated correctly.
+    $recur = \Civi\Api4\ContributionRecur::get(FALSE)
+    ->addSelect('contribution_status_id:name', 'amount', 'failure_retry_date', 'failure_count', 'cancel_date')
+    ->addWhere('id', '=', $this->crID)
+    ->execute()->single();
+    $this->assertEquals([
+      'id' => $this->crID,
+      'contribution_status_id:name' => 'Failing',
+      'amount' => 1.23,
+      'failure_retry_date' => date('Y-m-d 00:00:00', strtotime('today +1 week')),
+      'failure_count' => 2,
+      'cancel_date' => NULL,
+    ], $recur);
+
+    // Call SUT again, nothing should be generated.
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+    $this->assertEquals(['newPending' => [], 'contributionsProcessed' => []], $result);
+  }
+
+  /**
+   * Test that when a 3rd payment fails, there is no retry, but the CR is still not failed
+   * time in accordance with the config (in setup())
+   */
+  public function testPaymentDueButFailsSkipped():void {
+
+    // Adjust the fixture to show two failures, retry due.
+    $recur = \Civi\Api4\ContributionRecur::update(FALSE)
+    ->addValue('failure_retry_date', date('Y-m-d 00:00:00'))
+    ->addValue('failure_count', 2)
+    ->addWhere('id', '=', $this->crID)
+    ->execute();
+
+    $this->mockAdyenCheckoutPayments(['resultCode' => 'Refused', 'pspReference' => NULL]);
+
+    // Call SUT
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+
+    // Check that a contribution was created correctly
+    $this->assertFailedContribution($result);
+
+    // Check that the recur was updated correctly.
+    $recur = \Civi\Api4\ContributionRecur::get(FALSE)
+    ->addSelect('contribution_status_id:name', 'amount', 'failure_retry_date', 'failure_count', 'cancel_date')
+    ->addWhere('id', '=', $this->crID)
+    ->execute()->single();
+    $this->assertEquals([
+      'id' => $this->crID,
+      'contribution_status_id:name' => 'Failing',
+      'amount' => 1.23,
+      'failure_retry_date' => NULL,
+      'failure_count' => 3,
+      'cancel_date' => NULL,
+    ], $recur);
+
+    // Call SUT again, nothing should be generated.
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+    $this->assertEquals(['newPending' => [], 'contributionsProcessed' => []], $result);
+  }
+
+  /**
+   * Test the 'fail' retry policy.
+   */
+  public function testPaymentDueButFailsFailed():void {
+
+    // Adjust the config to not allow retries, and immediately fail the CR.
+    $jsonConfig = json_decode($this->testModePaymentProcessorConfig['signature'], TRUE);
+    $jsonConfig['retryPolicy'] = ['fail'];
+    $this->testModePaymentProcessorConfig = \Civi\Api4\PaymentProcessor::update(FALSE)
+    ->setReload(TRUE)
+    ->addWhere('id', '=',$this->testModePaymentProcessorObject->getID())
+    ->addValue('signature', json_encode($jsonConfig, JSON_PRETTY_PRINT))
+    ->execute()->single();
+    \Civi\Payment\System::singleton()->flushProcessors();
+    $this->testModePaymentProcessorObject = \Civi\Payment\System::singleton()->getByProcessor($this->testModePaymentProcessorConfig);
+
+    // Mock the checkouts API
+    $this->mockAdyenCheckoutPayments(['resultCode' => 'Refused', 'pspReference' => NULL]);
+
+    // Call SUT
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+
+    // Check that a contribution was created correctly
+    $this->assertFailedContribution($result);
+
+    // Check that the recur was updated correctly.
+    $recur = \Civi\Api4\ContributionRecur::get(FALSE)
+    ->addSelect('contribution_status_id:name', 'failure_retry_date', 'failure_count', 'cancel_date')
+    ->addWhere('id', '=', $this->crID)
+    ->execute()->single();
+    $this->assertLessThanOrEqual(2, time() - strtotime($recur['cancel_date']), "Cancel date should have been set to now (allowing 2s)");
+    unset($recur['cancel_date']);
+
+    $this->assertEquals([
+      'id' => $this->crID,
+      'contribution_status_id:name' => 'Failed',
+      'failure_retry_date' => NULL,
+      'failure_count' => 1,
+    ], $recur);
+
+    // Call SUT again, nothing should be generated.
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+    $this->assertEquals(['newPending' => [], 'contributionsProcessed' => []], $result);
+  }
+
+  protected function assertFailedContribution(array $result) {
     $this->assertArrayHasKey('newPending', $result);
     $this->assertArrayHasKey($this->crID, $result['newPending'], "Expect that there is a new contribution created for the CR but none was.");
     $contrib = Contribution::get(FALSE)
@@ -403,23 +554,6 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     // Adyen's pspReference is normally saved as our trxn_id, but not when it fails.
     $this->assertEmpty($contrib['trxn_id']);
 
-    // Check that the recur was updated correctly.
-    $recur = \Civi\Api4\ContributionRecur::get(FALSE)
-    ->addSelect('contribution_status_id:name', 'amount', 'failure_retry_date', 'failure_count', 'cancel_date')
-    ->addWhere('id', '=', $this->crID)
-    ->execute()->single();
-    $this->assertEquals([
-      'id' => $this->crID,
-      'contribution_status_id:name' => 'Failing',
-      'amount' => 1.23,
-      'failure_retry_date' => 'x',
-      'failure_count' => 1,
-      'cancel_date' => NULL,
-    ], $recur);
-
-    // Call SUT again, nothing should be generated.
-    // $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
-    // $this->assertEquals(['newPending' => [], 'contributionsProcessed' => []], $result);
   }
 
   protected function mockAdyenCheckoutPayments(array $result) {

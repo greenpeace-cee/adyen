@@ -263,9 +263,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
         ->addWhere('id', '=', $contribution['contribution_recur_id'])
         ->execute()->single();
 
-      $retriesLeft = max(0, CRM_Core_Payment_Adyen::MAX_FAILURES - $cr['failure_count'] - 1);
-
-      \Civi::log()->warning("[adyen] Failed attempting to take contribution $contribution[id] of $contribution[currency] $contribution[total_amount], ($retriesLeft retries left) got result:\n" . json_encode($result, JSON_PRETTY_PRINT));
+      \Civi::log()->warning("[adyen] Failed attempting to take contribution $contribution[id] of $contribution[currency] $contribution[total_amount],  got result:\n" . json_encode($result, JSON_PRETTY_PRINT));
 
       // Mark this Contribution as failed.
       Contribution::update(FALSE)
@@ -276,12 +274,22 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       $crUpdates = [
         'failure_count'               => $cr['failure_count'] + 1,
         'contribution_status_id:name' => 'Failing',
-        'failure_retry_date'          => date('Y-m-d', strtotime('tomorrow')), // @todo implement other end
       ];
 
-      if (!$retriesLeft) {
-        $crUpdates['contribution_status_id:name'] = 'Failed'; /* or cancelled? */
-        // Strictly, this is the date the contributor cancelled, but the only other date is end_date which is for successful completion.
+      $retryPolicy = $paymentProcessor->getRetryPolicy();
+      $activePolicy = $retryPolicy[$cr['failure_count'] ?? 0] ?? 'skip';
+      if (substr($activePolicy, 0, 1) === '+') {
+        $crUpdates['failure_retry_date'] = date('Y-m-d', strtotime("today $activePolicy"));
+        \Civi::log()->notice("[adyen] Scheduling retry for failed contribution $contribution[id] for $crUpdates[failure_retry_date]:");
+      }
+      elseif ($activePolicy === 'skip') {
+        \Civi::log()->notice("[adyen] Not scheduling a retry for failed contribution $contribution[id], we will try again next cycle.");
+        $crUpdates['failure_retry_date'] = NULL;
+      }
+      elseif ($activePolicy === 'fail') {
+        \Civi::log()->warning("[adyen] Marking recurring contribution Failed; no further retries or future payment attempts will be made.");
+        $crUpdates['contribution_status_id:name'] = 'Failed';
+        // Strictly, this is supposed to hold the date the contributor cancelled, but the only other date is end_date which is for successful completion.
         $crUpdates['cancel_date'] = date('Y-m-d H:i:s');
       }
 
