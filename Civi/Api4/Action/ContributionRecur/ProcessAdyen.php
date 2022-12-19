@@ -41,7 +41,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
    * Generate Pending contributions from Adyen ContributionRecur records.
    *
    * @return array keyed by ContributionRecur ID of created contribution IDs
-   * (or zero meaning one needs to be created but is waiting on another Pending Contribution). 
+   * (or zero meaning one needs to be created but is waiting on another Pending Contribution).
    */
   public function generatePendingContributions(): array {
     $dueRecurs = ContributionRecur::get(FALSE)
@@ -125,8 +125,8 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     $repeattransactionParams = [
       'original_contribution_id' => $cn['id'],
       'is_email_receipt'         => FALSE, /* We don't want this happening, we’re creating a pending one. */
-      'trxn_id'                  => $this->determineTrxnID($cr),
       'receive_date'             => $cnDate,
+      'is_test'                  => $cr['is_test'],
     ];
     // The total_amount: normally the same as the last contribution, unless
     // they have upgraded, in which case it should be the same as the Recur's
@@ -142,38 +142,44 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     }
     $cnPending = civicrm_api3('Contribution', 'repeattransaction', $repeattransactionParams);
 
+    // We can not supply an invoice_id
+    \Civi\Api4\Contribution::update(FALSE)
+    ->addWhere('id', '=', $cnPending['id'])
+    ->addValue('invoice_id', $this->determineInvoiceID($cr))
+    ->execute();
+
     return (int) $cnPending['id'];
   }
 
   /**
-   * Generate a unique transaction ID for a new contribution that belongs to a recur.
+   * Generate a unique invoice ID (Adyen: merchantReference) for a new contribution that belongs to a recur.
    *
    * This will be one of:
+   *
    * - CiviCRM-cr12345-2022-08-31 (normally)
-   * - CiviCRM-cr12345-2022-08-31-2 (if the first and 2nd ones failed and we had to create a third)
+   * - CiviCRM-cr12345-2022-08-31-2 (exceptional circumstances?)
    *
    */
-  public function determineTrxnID(array $cr): string {
-    // We don't have a trxn_id There should be only one for this CR and this date.
-    // This will become the 'merchant identifier' at Adyen.
-    $trxn_id = "CiviCRM-cr$cr[id]-" . date('Y-m-d');
-    // Check this trxn_id is new.
+  public function determineInvoiceID(array $cr): string {
+    $invoice_id = "CiviCRM-cr$cr[id]-" . date('Y-m-d');
+    // Check this invoice_id is new.
     $existing = \Civi\Api4\Contribution::get(FALSE)
-      ->addWhere('trxn_id', 'LIKE', "$trxn_id%")
-      ->addSelect('trxn_id')
+      ->addWhere('invoice_id', 'LIKE', "$invoice_id%")
+      ->addSelect('invoice_id')
+      ->addOrderBy('invoice_id')
       ->execute()->last();
     if ($existing) {
       // This means we generated one or more Contributions that failed.
-      if (preg_match('/CiviCRM-cr\d+-\d{4}-\d\d-\d\d-(\d)$/', $existing['trxn_id'] ?? '', $matches)) {
+      if (preg_match('/CiviCRM-cr\d+-\d{4}-\d\d-\d\d-(\d)$/', $existing['invoice_id'] ?? '', $matches)) {
         // This is going to be the 3rd or later attempt.
-        $trxn_id .= "-" . (((int) $matches[1]) + 1);
+        $invoice_id .= "-" . (((int) $matches[1]) + 1);
       }
       else {
         // This is the 2nd
-        $trxn_id .= "-1";
+        $invoice_id .= "-1";
       }
     }
-    return $trxn_id;
+    return $invoice_id;
   }
 
   /**
@@ -182,6 +188,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   public function processPendingContributions(): array {
     $contributions = Contribution::get()
     ->addSelect('*', 'cr.payment_processor_id')
+    ->addWhere('is_test', 'IN', [0, 1])
     // The commented version did not work
     // ->addJoin('ContributionRecur AS cr', 'INNER', NULL,
     //   ['cr.id', '=', 'contribution_recur_id'],
@@ -282,7 +289,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     }
 
     ContributionRecur::update(FALSE)
-    ->addWhere('id', '=', $cr['id'])
+    ->addWhere('id', '=', $contribution['contribution_recur_id'])
     ->setValues($crUpdates)
     ->execute();
 

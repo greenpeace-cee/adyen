@@ -37,6 +37,10 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
   private $paymentReference;
 
   /**
+   */
+  public $mocks = [];
+
+  /**
    * Constructor
    *
    * @param string $mode
@@ -123,7 +127,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
    */
   public function attemptPayment(array $contribution): array {
 
-    $service = new \Adyen\Service\Checkout($this->client);
+    $service = $this->adyenFactory(\Adyen\Service\Checkout::class, $this->client);
     $params = [
       "amount" => [
         "currency" => $contribution['currency'],
@@ -152,6 +156,21 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
     }
     return $result;
   }
+
+
+  /**
+   * Allow mocking services in tests.
+   */
+  public function adyenFactory($className, ...$constructorArgs) {
+    if (isset($this->mocks[$className])) {
+      $callable = $this->mocks[$className];
+      return $callable($constructorArgs);
+    }
+    else {
+      return new $className(...$constructorArgs);
+    }
+  }
+
   /**
    * This function checks to see if we have the right config values.
    *

@@ -10,6 +10,10 @@ use Civi\Api4\ContributionRecur;
 use Civi\Api4\Contribution;
 use Civi\Api4\Action\ContributionRecur\ProcessAdyen;
 
+if (!defined('ADYEN_PHPUNIT_TEST')) {
+  define('ADYEN_PHPUNIT_TEST', TRUE);
+}
+
 /**
  * Tests the ContributionRecur.processAdyen API4 action.
  *
@@ -29,6 +33,10 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
 
   /** @var array holds the data for the test mode processor */
   public array $testModePaymentProcessorConfig;
+
+  /** @var CRM_Core_Payment_Adyen */
+  public CRM_Core_Payment_Adyen $testModePaymentProcessorObject;
+
 
   /**
    * Holds the primary test ContributionRecur ID
@@ -116,7 +124,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
         'password'  => 'fake_live_password',
         'signature' => json_encode([
           'clientKey' => 'live_DUMMYCLIENTKEY',
-          'urlPrefix' => 'https://something.example.org', // only used for live mode.
+          'urlPrefix' => '', // only used for live mode.
           'hmacKeys'  => [
             'SECRET_HMAC_KEY_3',
             'SECRET_HMAC_KEY_4',
@@ -126,6 +134,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     ])
     ->execute()->first();
 
+    /** @var CRM_Core_Payment_Adyen */
     $this->testModePaymentProcessorObject = \Civi\Payment\System::singleton()->getByProcessor($this->testModePaymentProcessorConfig);
 
     // Create a contact, a ContributionRecur and a completed Contribution, simulating entities created by existing outside processes.
@@ -148,11 +157,13 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
         'next_sched_contribution_date' => 'today',
         'start_date'                   => $dateOfFirstContribution,
         'contribution_status_id:name'  => 'In Progress',
-        'payment_processor_id:name'    => 'Adyen',
+        // You cannot set payment_processor_id:name - it picks the live one even though this is_test. So specificy it by ID:
+        'payment_processor_id'         => $this->testModePaymentProcessorConfig['id'],
         'is_test'                      => TRUE,
         // @todo Q. what to do re payment instrument ID (I think Adyen, but they might want card/EFT/etc. as Adyen supports various)
       ])
       ->execute()->single()['id'];
+
 
     // Create initial contribution.
     $this->cn1ID = civicrm_api3('Contribution', 'create', [
@@ -268,6 +279,9 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     $this->assertEquals(substr($expectedNextSchedContributionDate, 0, 10), substr($next_sched_contribution_date, 0, 10), "Next scheduled date was not as expected.");
   }
 
+  /**
+   * Provides a way to test the hook.
+   */
   public function on_civi_recur_nextschedcontributiondatealter(\Civi\Core\Event\GenericHookEvent $event) {
     $this->hookWasCalled = TRUE;
     if (!empty($this->overrideNextSchedDate)) {
@@ -281,18 +295,18 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
 
     $thisMonth = date('Y-m-01');
     $lastMonth = date('Y-m-01 00:00:00', strtotime("$thisMonth - 1 month"));
-    
+
     return [
       'A due, In progress CR, should result in a contribution today.' => [
-        $today, 'In Progress', ['receive_date' => $today], 
+        $today, 'In Progress', ['receive_date' => $today],
         date('Y-m-d 00:00:00', strtotime('today + 1 month'))
       ],
       'Default next_sched_contribution_date calculation' => [
-        $today, 'In Progress', ['receive_date' => $today], 
+        $today, 'In Progress', ['receive_date' => $today],
         date('Y-m-d 00:00:00', strtotime('today + 1 month'))
       ],
       'Overridden next_sched_contribution_date calculation' => [
-        $today, 'In Progress', ['receive_date' => $today], 
+        $today, 'In Progress', ['receive_date' => $today],
         '='. date('Y-m-d 00:00:00', strtotime('today + 6 weeks'))
       ],
       'An In progress CR due tomorrow, should not result in a new contribution.' => [
@@ -306,7 +320,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
         $today, 'Cancelled', []
       ],
       'An In progress CR with two payments due should ??? @todo' => [
-        $lastMonth, 'In Progress', ['receive_date' => $lastMonth], 
+        $lastMonth, 'In Progress', ['receive_date' => $lastMonth],
         date('Y-m-d 00:00:00', strtotime("$lastMonth + 2 months")),
         'no_op_warning'
       ],
@@ -315,11 +329,17 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
   }
 
   /**
-   * Adding a pending contribution when due.
+   * Simple test: a payment is due, and successfully submitted.
+   *
    */
-  public function testPrimaryFunction():void {
-    $result = ContributionRecur::processAdyen(FALSE)
-      ->execute()->getArrayCopy();
+  public function testPaymentDueAndSuccessful():void {
+
+    $this->mockAdyenCheckoutPayments([]);
+
+    // Call SUT
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+
+    // Check that a contribution was created correctly
     $this->assertArrayHasKey('newPending', $result);
     $this->assertArrayHasKey($this->crID, $result['newPending'], "Expect that there is a new contribution created for the CR but none was.");
     $contrib = Contribution::get(FALSE)
@@ -327,19 +347,103 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     ->addWhere('is_test', 'IN', [0, 1])
     ->addSelect('receive_date', 'contribution_status_id:name', 'total_amount', 'trxn_id', 'contribution_recur_id', 'invoice_id', 'invoice_number')
     ->execute()->single();
-
     $this->assertEquals($this->crID, $contrib['contribution_recur_id']);
-    $this->assertEquals('Pending', $contrib['contribution_status_id:name']);
+    $this->assertEquals('Completed', $contrib['contribution_status_id:name']);
     $this->assertEquals(date('Y-m-d 00:00:00'), $contrib['receive_date']);
     $this->assertEquals(1.23, $contrib['total_amount']);
-    $this->assertEquals("CiviCRM-cr{$this->crID}-" . date('Y-m-d'), $contrib['trxn_id']);
-    $this->assertEquals('', $contrib['invoice_id']); // machine
-    $this->assertEquals('', $contrib['invoice_number']); // human readable
+    // Our Invoice ID is Adyen's merchantReference
+    $this->assertEquals("CiviCRM-cr{$this->crID}-" . date('Y-m-d'), $contrib['invoice_id']);
+    // Adyen's pspReference is saved as our trxn_id
+    $this->assertEquals('DummyPspRef1', $contrib['trxn_id']); // from the payment
 
-    // Call again, nothing should be generated.
+    // Check that the recur was updated correctly.
+    $recur = \Civi\Api4\ContributionRecur::get(FALSE)
+    ->addSelect('contribution_status_id:name', 'amount', 'failure_retry_date', 'failure_count', 'cancel_date')
+    ->addWhere('id', '=', $this->crID)
+    ->execute()->single();
+    $this->assertEquals([
+      'id' => $this->crID,
+      'contribution_status_id:name' => 'In Progress',
+      'amount' => 1.23,
+      'failure_retry_date' => NULL,
+      'failure_count' => 0,
+      'cancel_date' => NULL,
+    ], $recur);
+
+    // Call SUT again, nothing should be generated.
     $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+    $this->assertEquals(['newPending' => [], 'contributionsProcessed' => []], $result);
+  }
+
+  /**
+   * Simple test: a payment is due, but it fails
+   *
+   */
+  public function testPaymentDueButFails():void {
+
+    $this->mockAdyenCheckoutPayments(['resultCode' => 'Refused', 'pspReference' => NULL]);
+
+    // Call SUT
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+
+    // Check that a contribution was created correctly
     $this->assertArrayHasKey('newPending', $result);
-    $this->assertCount(0, $result['newPending']);
+    $this->assertArrayHasKey($this->crID, $result['newPending'], "Expect that there is a new contribution created for the CR but none was.");
+    $contrib = Contribution::get(FALSE)
+    ->addWhere('id', '=', $result['newPending'][$this->crID])
+    ->addWhere('is_test', 'IN', [0, 1])
+    ->addSelect('receive_date', 'contribution_status_id:name', 'total_amount', 'trxn_id', 'contribution_recur_id', 'invoice_id', 'invoice_number')
+    ->execute()->single();
+    $this->assertEquals($this->crID, $contrib['contribution_recur_id']);
+    $this->assertEquals('Failed', $contrib['contribution_status_id:name']);
+    $this->assertEquals(date('Y-m-d 00:00:00'), $contrib['receive_date']);
+    $this->assertEquals(1.23, $contrib['total_amount']);
+    // Our Invoice ID is Adyen's merchantReference
+    $this->assertEquals("CiviCRM-cr{$this->crID}-" . date('Y-m-d'), $contrib['invoice_id']);
+    // Adyen's pspReference is normally saved as our trxn_id, but not when it fails.
+    $this->assertEmpty($contrib['trxn_id']);
+
+    // Check that the recur was updated correctly.
+    $recur = \Civi\Api4\ContributionRecur::get(FALSE)
+    ->addSelect('contribution_status_id:name', 'amount', 'failure_retry_date', 'failure_count', 'cancel_date')
+    ->addWhere('id', '=', $this->crID)
+    ->execute()->single();
+    $this->assertEquals([
+      'id' => $this->crID,
+      'contribution_status_id:name' => 'Failing',
+      'amount' => 1.23,
+      'failure_retry_date' => 'x',
+      'failure_count' => 1,
+      'cancel_date' => NULL,
+    ], $recur);
+
+    // Call SUT again, nothing should be generated.
+    // $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+    // $this->assertEquals(['newPending' => [], 'contributionsProcessed' => []], $result);
+  }
+
+  protected function mockAdyenCheckoutPayments(array $result) {
+    $mockConfig = $this->createMock(\Adyen\Config::class);
+    $map = [
+      ['environment', \Adyen\Environment::TEST],
+      ['endpointCheckout', 'https://mock-endpoint.localhost'],
+    ];
+    $mockConfig->method('get')->willReturnMap($map);
+    $mock = $this->createMock(\Adyen\Client::class);
+    $mock->method('getConfig')->willReturn($mockConfig);
+    $this->testModePaymentProcessorObject->setMockAdyenClient($mock);
+
+    $this->testModePaymentProcessorObject->mocks = [
+      \Adyen\Service\Checkout::class => function($constructorArgs) use ($result) {
+        $m = $this->createMock(\Adyen\Service\Checkout::class);
+        $m->method('payments')
+          ->willReturn($result + [
+            'resultCode' => 'Authorized',
+            'pspReference' => 'DummyPspRef1',
+          ]);
+        return $m;
+      }
+    ];
   }
 
 }
