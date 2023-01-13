@@ -106,7 +106,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
       'is_recur'                       => 1,
       'payment_type'                   => 1,
       'url_api'                        => 'http://notused.example.org',
-      'payment_instrument_id:name'     => "credit_card",
+      'payment_instrument_id:name'     => "Credit Card",
       'domain_id'                      => 1,
     ])
     ->setRecords([
@@ -263,7 +263,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
         'is_test'               => 1,
         'contribution_recur_id' => $this->crID,
         'financial_type_id'     => 1,
-        'invoice_id'            => "CiviCRM-cr{$this->crID}-" . date('Y-m-d'),
+        'invoice_id'            => "CiviCRM-cn{$newContributionID}-cr{$this->crID}",
       ];
       foreach ($expectations as $key => $value) {
         $this->assertArrayHasKey($key, $order);
@@ -385,7 +385,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     $this->assertEquals(date('Y-m-d 00:00:00'), $contrib['receive_date']);
     $this->assertEquals(1.23, $contrib['total_amount']);
     // Our Invoice ID is Adyen's merchantReference
-    $this->assertEquals("CiviCRM-cr{$this->crID}-" . date('Y-m-d'), $contrib['invoice_id']);
+    $this->assertEquals("CiviCRM-cn{$contrib['id']}-cr{$this->crID}", $contrib['invoice_id']);
     // Adyen's pspReference is saved as our trxn_id
     $this->assertEquals('DummyPspRef1', $contrib['trxn_id']); // from the payment
 
@@ -580,7 +580,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     $this->assertEquals(date('Y-m-d 00:00:00'), $contrib['receive_date']);
     $this->assertEquals(1.23, $contrib['total_amount']);
     // Our Invoice ID is Adyen's merchantReference
-    $this->assertEquals("CiviCRM-cr{$this->crID}-" . date('Y-m-d'), $contrib['invoice_id']);
+    $this->assertEquals("CiviCRM-cn{$contrib['id']}-cr{$this->crID}");
     // Adyen's pspReference is normally saved as our trxn_id, but not when it fails.
     $this->assertEmpty($contrib['trxn_id']);
 

@@ -87,7 +87,7 @@ A scheduled job
 - Finds CRs where `next_sched_contribution_date` < end of today, using php's timezone, and assuming the data in the database to match. Loops:
 - Strategy: create the contribution record with status = 2 (= pending), try the payment, and update the status to 1 if successful
   also, advance the next scheduled payment before the payment attempt and pull it back if we know it fails.
-- Looks for a template for creating a new contribution. 
+- Looks for a template for creating a new contribution.
 - Checks existance of payment token referenced by CR, collects an error string if not found. Presumably here it should also check the expiry date.
 - something special on `is_email_receipt`
 - checks for a pending contribution linked to this CR that has a NULL trxn_id. It will recycle this record if found.
@@ -100,7 +100,7 @@ A scheduled job
    - But first: advance the next collection date now so that in case of server failure on return from a payment request I don't try to take money again.
    - Save the current value to restore in case of payment failure (perhaps ...).
  - There's some hacks around whether to use repeattransaction, which is used for CR CNs where the CN is not yet saved.
- - If not using repeattransaction, it handles the CN.create call and also MembershipPayment.create, and finishes with CN.completetransaction 
+ - If not using repeattransaction, it handles the CN.create call and also MembershipPayment.create, and finishes with CN.completetransaction
  - Various hacks around core's resettting of data - Wow this is annoying.
  - (unclear: how contributions that end up still pending due to server failure are ever picked up)
  - uses `failure_count`
@@ -145,14 +145,6 @@ And for a recur where there’s not a pending:
 - IRL: some hacks to properly set things core didn't.
 - Payment.create
 - IRL: some hacks to properly set things core didn't.
-
-### Adyen model for claiming payments
-
-This could work similarly, given that the iATS process has been in production for a long time; it works.
-
-1. Gather CRs that are due (In Progress, `next_sched_contribution_date`, active Adyen pp)
-2. No pending CN? Use `CN.repeattransaction` to make one.
-3. Attempt a payment via Adyen's API, record via `Payment.create`
 
 
   [1]: https://docs.adyen.com/get-started-with-adyen/payment-glossary#psp-reference

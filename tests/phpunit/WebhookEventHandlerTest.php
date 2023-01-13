@@ -59,7 +59,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
       'is_recur' => 1,
       'payment_type' => 1,
       'url_api' => 'http://notused.example.org',
-      'payment_instrument_id:name' => "credit_card",
+      'payment_instrument_id:name' => "Credit Card",
       'domain_id' => 1,
     ])
     ->setRecords([

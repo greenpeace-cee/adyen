@@ -144,43 +144,14 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     }
     $cnPending = civicrm_api3('Contribution', 'repeattransaction', $repeattransactionParams);
 
-    // We can not supply an invoice_id
+    // We can not supply an invoice_id to repeattransaction, and anyway we want to use the Contribution ID
+    // which hadn't existed at that point. This invoice_id will be passed to Adyen as a merchantReference.
     \Civi\Api4\Contribution::update(FALSE)
     ->addWhere('id', '=', $cnPending['id'])
-    ->addValue('invoice_id', $this->determineInvoiceID($cr))
+    ->addValue('invoice_id', "CiviCRM-cn{$cnPending['id']}-cr{$cr['id']}")
     ->execute();
 
     return (int) $cnPending['id'];
-  }
-
-  /**
-   * Generate a unique invoice ID (Adyen: merchantReference) for a new contribution that belongs to a recur.
-   *
-   * - CiviCRM-cr12345-2022-08-31   Typically, but in the case of failed contribs you may see:
-   * - CiviCRM-cr12345-2022-08-31-1
-   * - CiviCRM-cr12345-2022-08-31-2...
-   *
-   */
-  public function determineInvoiceID(array $cr): string {
-    $invoice_id = "CiviCRM-cr$cr[id]-" . date('Y-m-d');
-    // Check this invoice_id is new.
-    $existing = \Civi\Api4\Contribution::get(FALSE)
-      ->addWhere('invoice_id', 'LIKE', "$invoice_id%")
-      ->addSelect('invoice_id')
-      ->addOrderBy('invoice_id')
-      ->execute()->last();
-    if ($existing) {
-      // This means we generated one or more Contributions that failed.
-      if (preg_match('/CiviCRM-cr\d+-\d{4}-\d\d-\d\d-(\d)$/', $existing['invoice_id'] ?? '', $matches)) {
-        // This is going to be the 3rd or later attempt.
-        $invoice_id .= "-" . (((int) $matches[1]) + 1);
-      }
-      else {
-        // This is the 2nd
-        $invoice_id .= "-1";
-      }
-    }
-    return $invoice_id;
   }
 
   /**
