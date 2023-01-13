@@ -40,8 +40,10 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   /**
    * Generate Pending contributions from Adyen ContributionRecur records.
    *
-   * @return array keyed by ContributionRecur ID of created contribution IDs
-   * (or zero meaning one needs to be created but is waiting on another Pending Contribution).
+   * @return array
+   *    ...of created contribution IDs, keyed by ContributionRecur ID.
+   *    Special case: A contribution ID of zero means one needs to be created
+   *    but is waiting on another Pending Contribution.
    */
   public function generatePendingContributions(): array {
     $dueRecurs = ContributionRecur::get(FALSE)
@@ -154,10 +156,9 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   /**
    * Generate a unique invoice ID (Adyen: merchantReference) for a new contribution that belongs to a recur.
    *
-   * This will be one of:
-   *
-   * - CiviCRM-cr12345-2022-08-31 (normally)
-   * - CiviCRM-cr12345-2022-08-31-2 (exceptional circumstances?)
+   * - CiviCRM-cr12345-2022-08-31   Typically, but in the case of failed contribs you may see:
+   * - CiviCRM-cr12345-2022-08-31-1
+   * - CiviCRM-cr12345-2022-08-31-2...
    *
    */
   public function determineInvoiceID(array $cr): string {
@@ -262,6 +263,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
         ->addSelect('failure_count', 'contribution_status_id:name')
         ->addWhere('id', '=', $contribution['contribution_recur_id'])
         ->execute()->single();
+      $previousFailureCount = (int) ($cr['failure_count'] ?? 0);
 
       \Civi::log()->warning("[adyen] Failed attempting to take contribution $contribution[id] of $contribution[currency] $contribution[total_amount],  got result:\n" . json_encode($result, JSON_PRETTY_PRINT));
 
@@ -272,12 +274,12 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
         ->execute();
 
       $crUpdates = [
-        'failure_count'               => $cr['failure_count'] + 1,
+        'failure_count'               => $previousFailureCount+1,
         'contribution_status_id:name' => 'Failing',
       ];
 
       $retryPolicy = $paymentProcessor->getRetryPolicy();
-      $activePolicy = $retryPolicy[$cr['failure_count'] ?? 0] ?? 'skip';
+      $activePolicy = $retryPolicy[$previousFailureCount] ?? 'skip';
       if (substr($activePolicy, 0, 1) === '+') {
         $crUpdates['failure_retry_date'] = date('Y-m-d', strtotime("today $activePolicy"));
         \Civi::log()->notice("[adyen] Scheduling retry for failed contribution $contribution[id] for $crUpdates[failure_retry_date]:");

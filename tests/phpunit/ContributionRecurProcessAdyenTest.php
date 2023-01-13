@@ -44,6 +44,11 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
   protected int $contactID;
 
   /**
+   * Holds the payment token ID
+   */
+  protected int $paymentTokenID;
+
+  /**
    * Holds the primary test ContributionRecur ID
    */
   protected int $crID;
@@ -140,9 +145,20 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     /** @var CRM_Core_Payment_Adyen */
     $this->testModePaymentProcessorObject = \Civi\Payment\System::singleton()->getByProcessor($this->testModePaymentProcessorConfig);
 
-    // Create a contact, a ContributionRecur and a completed Contribution, simulating entities created by existing outside processes.
+    // Create a contact, PaymentToken, a ContributionRecur and a completed Contribution, simulating entities created by existing outside processes.
     $this->contactID = Contact::create(FALSE)
       ->setValues(['display_name' => 'Wilma'])->execute()->single()['id'];
+
+    // Create a dummy payment token.
+    $this->paymentTokenID = \Civi\Api4\PaymentToken::create(FALSE)
+    ->setValues([
+      'contact_id' => $this->contactID,
+      'payment_processor_id' => $this->testModePaymentProcessorConfig['id'],
+      'expiry_date' => date('Ymd', strtotime('now + 1 year')),
+      'masked_account_number' => 'visa ... 4242',
+      'token' => '1234567890',
+    ])
+    ->execute()->first()['id'];
 
     // The contribution we assume is Completed a month ago, and the
     // CR is now due today.
@@ -159,11 +175,13 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
         'frequency_interval'           => 1,
         'next_sched_contribution_date' => 'today',
         'start_date'                   => $dateOfFirstContribution,
+        'processor_id'                 => 'TEST_SHOPPER_REF',
         'contribution_status_id:name'  => 'In Progress',
         // You cannot set payment_processor_id:name - it picks the live one even though this is_test. So specificy it by ID:
         'payment_processor_id'         => $this->testModePaymentProcessorConfig['id'],
         'is_test'                      => TRUE,
-        // @todo Q. what to do re payment instrument ID (I think Adyen, but they might want card/EFT/etc. as Adyen supports various)
+        'payment_instrument_id:name'   => 'Credit Card',
+        'payment_token_id'             => $this->paymentTokenID,
       ])
       ->execute()->single()['id'];
 
@@ -261,8 +279,10 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
         $this->assertEquals(0, count($newPending), "Expected nothing to happen if we repeated, but something happened!");
       }
       elseif ($repeat === 'no_op_warning') {
-        $this->assertArrayHasKey($this->crID, $newPending, "Expected that a Contribution ID of 0 was returned for the ContributionRecur key $this->crID but " . count($newPending) . " contributions returned without that key.");
-        $this->assertEquals(0, $newPending[$this->crID], "Expected a zero Contribution ID is returned.");
+        $this->assertArrayHasKey($this->crID, $newPending,
+          "Expected that only Contribution ID of 0 was returned for the ContributionRecur key $this->crID but "
+          . count($newPending) . " other contributions were returned.");
+        $this->assertEquals(0, $newPending[$this->crID], "Expected a zero Contribution ID is returned (meaning no contribution created because there is already a pending one).");
       }
       else {
         throw new \InvalidArgumentException("'$repeat' is not one of nothing|no_op_warning; this is a bug in the test case code.");
@@ -299,6 +319,11 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     $thisMonth = date('Y-m-01');
     $lastMonth = date('Y-m-01 00:00:00', strtotime("$thisMonth - 1 month"));
 
+    // string $next_sched_contribution_date,
+    // string $crStatus,
+    // array $contribution expectations
+    // string $expectedNextSchedContributionDate = 'unchanged',
+    // string $repeat = 'nothing'): void {
     return [
       'A due, In progress CR, should result in a contribution today.' => [
         $today, 'In Progress', ['receive_date' => $today],
@@ -322,7 +347,12 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
       'An Cancelled CR should not result in a new contribution' => [
         $today, 'Cancelled', []
       ],
-      'An In progress CR with two payments due should ??? @todo' => [
+      'An In progress CR with two payments overdue should result in a contribution for a month ago, and the next payment should be a month hence.' => [
+        // artfulrobot says: The thought here is that (a) this should not occur anyway, and (b) that
+        // if someone is to be charged for a month, then they should not be charged twice. This is because
+        // as a *donation* it seems unfair from the donor's point of view - better to skip a month for some
+        // reason than to be charged twice. Were this for some product or service, it might be more appropriate
+        // to make 2 charges; or one for double the amount etc.
         $lastMonth, 'In Progress', ['receive_date' => $lastMonth],
         date('Y-m-d 00:00:00', strtotime("$lastMonth + 2 months")),
         'no_op_warning'
@@ -332,7 +362,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
   }
 
   /**
-   * Simple test: a payment is due, and successfully submitted.
+   * Simple test: a payment is due, and successfully submitted. Repeating the call should do nothing.
    *
    */
   public function testPaymentDueAndSuccessful():void {

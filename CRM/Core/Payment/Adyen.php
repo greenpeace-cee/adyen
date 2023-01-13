@@ -76,7 +76,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
   }
 
   /**
-   * @todo artfulrobot: what is this?
+   * @see https://docs.adyen.com/development-resources/live-endpoints#live-url-prefix
    *
    * @return string
    */
@@ -132,26 +132,48 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
    * @see https://docs.adyen.com/online-payments/tokenization/create-and-use-tokens?tab=codeBlockpay_subscriptions_yjkfY_PHP_4
    *
    * @return array with keys: success (bool), pspReference (string), resultCode (string)
+   *
+   * @throw \InvalidArgumentException if there is something wrong with the data our end.
    */
   public function attemptPayment(array $contribution): array {
+    // Load the storedPaymentMethodId from the payment token for this recur.
+    $recurAndToken = \Civi\Api4\ContributionRecur::get(FALSE)
+    ->addSelect('processor_id', 'payment_token.token', 'payment_token.expiry_date')
+    ->addJoin('PaymentToken AS payment_token', 'INNER', ['payment_token_id', '=', 'payment_token.id'])
+    ->addWhere('id', '=', (int) ($contribution['contribution_recur_id'] ?? 0))
+    ->execute()->first();
+
+    if (empty($recurAndToken['processor_id'])) {
+      throw new \InvalidArgumentException("[adyen] Cannot process contribution with ID $contribution[id] because there was no processor_id (shopperReference) on the ContributionRecur (ID $contribution[contribution_recur_id]).");
+    }
+    if (empty($recurAndToken['payment_token.token'])) {
+      throw new \InvalidArgumentException("[adyen] Cannot process contribution with ID $contribution[id] because there was no PaymentToken associated with the ContributionRecur (ID $contribution[contribution_recur_id]).");
+    }
+    if (!empty($recurAndToken['payment_token.expiry_date']) && strtotime($recurAndToken['payment_token.expiry_date']) < time()) {
+      throw new \InvalidArgumentException("[adyen] Cannot process contribution with ID $contribution[id] because there the PaymentToken has expired.");
+    }
 
     $service = $this->adyenFactory(\Adyen\Service\Checkout::class, $this->client);
     $params = [
-      "amount" => [
-        "currency" => $contribution['currency'],
-        "value"    => $contribution['total_amount'],
+      'amount'        => [
+        'currency' => $contribution['currency'],
+        'value'    => $contribution['total_amount'],
       ],
-      "reference" => $contribution['trxn_id'], // not sure about this.
-      "paymentMethod" => [
-        "type"                  => "scheme",
-        "storedPaymentMethodId" => "", // @todo we need the 'additionalData.recurring.recurringDetailReference' from the initial operation.
+      'reference'     => $contribution['invoice_id'],
+      'paymentMethod' => [
+        'type'                  => 'scheme',
+        'storedPaymentMethodId' => $recurAndToken['payment_token.token'],
       ],
-      // "returnUrl"             => "https://your-company.com/checkout/", // Surely this makes no sense in an API driven workflow?
-      "shopperInteraction"       => "ContAuth",
-      "recurringProcessingModel" => "Subscription",
-      "shopperReference"         => '', // @todo this will be set by the external system - we need a way to find out what it is.
+      // The following key is included in the example in the Adyen docs, but
+      // surely this makes no sense in an API driven workflow? Assuming it's
+      // optional and left in the example by mistake.
+      // 'returnUrl'             => 'https://your-company.com/checkout/',
+      'shopperInteraction'       => 'ContAuth',
+      'recurringProcessingModel' => 'Subscription',
       'merchantAccount'          => $this->getMerchantAccount(),
-      'clientKey'                => $this->getClientKey(),
+      'shopperReference'         => $recurAndToken['processor_id'],
+      // The following is not listed in the docs.
+      // 'clientKey'                => $this->getClientKey(),
     ];
 
     $result = $service->payments($params);
