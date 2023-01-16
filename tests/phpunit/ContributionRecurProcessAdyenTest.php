@@ -580,7 +580,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     $this->assertEquals(date('Y-m-d 00:00:00'), $contrib['receive_date']);
     $this->assertEquals(1.23, $contrib['total_amount']);
     // Our Invoice ID is Adyen's merchantReference
-    $this->assertEquals("CiviCRM-cn{$contrib['id']}-cr{$this->crID}");
+    $this->assertEquals("CiviCRM-cn{$contrib['id']}-cr{$this->crID}", $contrib['invoice_id']);
     // Adyen's pspReference is normally saved as our trxn_id, but not when it fails.
     $this->assertEmpty($contrib['trxn_id']);
 
