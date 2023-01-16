@@ -45,19 +45,14 @@ Currently it loads with a fixed amount (EUR 10).
 - The webhook checks do not work - it is supposed to authorize using the X-API-Key but returns 401 unauthorized when getting the list of webhooks.
 
 - We currently *only* process the AUTHORISATION webhook.
-- This extension (https://github.com/greenpeace-cee/adyen) has code to process the SETTLEMENT_REPORT (@artfulrobot says: I can't find reference to these notifications existing.). We can probably re-use code from that to process the SETTLEMENT_REPORT notifications when they arrive in the queue.
-- In adyen dashboard -> Webhooks there is a "Settings" button.
+- This extension (https://github.com/greenpeace-cee/adyen-settlement) has code to process the `SETTLEMENT_REPORT` and we plan to merge that extension into this one.
+- In Adyen dashboard -> Webhooks there is a "Settings" button.
   Click on that to enable "Delayed Capture" notifications so that we can process "CAPTURE" notifications.
   Not sure if this will work!
 
 ## Reference
 
 See https://docs.adyen.com/account/manage-payments
-
-PSP reference: Adyen's unique 16-character reference for this payment.
-Merchant reference: Your reference for this payment.
-
-CiviCRM Contribution `trxn_id` = Adyen Merchant Reference
 
 ## Setup Adyen Webhook notifications
 
