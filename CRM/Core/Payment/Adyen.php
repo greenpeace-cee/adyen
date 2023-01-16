@@ -150,7 +150,8 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
       throw new \InvalidArgumentException("[adyen] Cannot process contribution with ID $contribution[id] because there was no PaymentToken associated with the ContributionRecur (ID $contribution[contribution_recur_id]).");
     }
     if (!empty($recurAndToken['payment_token.expiry_date']) && strtotime($recurAndToken['payment_token.expiry_date']) < time()) {
-      throw new \InvalidArgumentException("[adyen] Cannot process contribution with ID $contribution[id] because there the PaymentToken has expired.");
+      // throw new \InvalidArgumentException("[adyen] Cannot process contribution with ID $contribution[id] because there the PaymentToken has expired.");
+      Civi::log()->notice("[adyen] attemptPayment is about to submit a payment request against the payment token for ContributionRecur id {$contribution['contribution_recur_id']} (Contribution ID {$contribution['id']}) expired at {$recurAndToken['payment_token.expiry_date']}. This might still succeed due to Adyen’s 'Account updater' feature.");
     }
 
     $service = $this->adyenFactory(\Adyen\Service\Checkout::class, $this->client);
@@ -178,7 +179,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
 
     $result = $service->payments($params);
     if (($result['resultCode'] ?? '') === 'Authorized') {
-      // Looks good. The caller should store pspReference as a trxn id of some sort.
+      // Looks good. The caller should store pspReference as a trxn id.
       $result['success'] = TRUE;
     }
     else {
