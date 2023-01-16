@@ -44,6 +44,9 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
       ->apply();
   }
 
+  /**
+   * Creates a test-mode payment processor (everything is fake)
+   */
   public function setUp():void {
     parent::setUp();
 
@@ -111,7 +114,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
   }
 
   /**
-   * Test that a successful AUTHORISED webhook results in a Pending contribution.
+   * Test that a successful new AUTHORISED webhook results in a new Completed contribution.
    */
   public function testAuthorisedSuccess():void {
     $eventData = $this->loadFixtureData('webhook-authorised.json');
@@ -120,14 +123,100 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
     $this->assertInstanceOf(stdClass::class, $result);
     $this->assertTrue($result->ok);
     $this->assertNull($result->exception);
-    $this->assertEquals(1, preg_match('/^OK\. Contribution created with ID: (\d+)$/', $result->message, $matches));
 
-    // Load the contribution.
+    $this->assertEquals(1, preg_match('/^OK\. Created new contribution (\d+), invoice_id civi-mock-ref-1, trxn_id TQ9J3F3J7G9WHD82\./', $result->message, $matches));
+
+    // Load the contribution to check it is Completed.
     $cn = \Civi\Api4\Contribution::get(FALSE)
     ->addSelect('id', 'contribution_status_id:name')
     ->addWhere('id', '=', $matches[1])
     ->execute()->single();
-    $this->assertEquals('Pending', $cn['contribution_status_id:name']);
+    $this->assertEquals('Completed', $cn['contribution_status_id:name']);
+  }
+
+  /**
+   * Test that a successful AUTHORISED webhook firing against a contribution we already updates expiry and card details.
+   *
+   */
+  public function testAuthorisedUpdate():void {
+
+    $eventData = $this->loadFixtureData('webhook-authorised.json');
+
+    // Create a contact, PaymentToken, a ContributionRecur and a completed Contribution, simulating entities created by existing outside processes.
+    $contactID = \Civi\Api4\Contact::create(FALSE)
+      ->setValues(['display_name' => 'Wilma'])->execute()->single()['id'];
+
+    // Create a dummy payment token.
+    $paymentTokenID = \Civi\Api4\PaymentToken::create(FALSE)
+    ->setValues([
+      'contact_id' => $contactID,
+      'payment_processor_id' => $this->testModePaymentProcessorConfig['id'],
+      'expiry_date' => date('Ymd', strtotime('now + 1 year')),
+      'masked_account_number' => 'visa ... 4242',
+      'token' => '1234567890',
+    ])
+    ->execute()->first()['id'];
+
+    $crID = \Civi\Api4\ContributionRecur::create(FALSE)
+      ->setValues([
+        'contact_id'                   => $contactID,
+        'amount'                       => '1.23',
+        'currency'                     => 'EUR',
+        'financial_type_id'            => 1,
+        'frequency_unit'               => 'month',
+        'frequency_interval'           => 1,
+        'next_sched_contribution_date' => 'today',
+        'start_date'                   => 'today',
+        'processor_id'                 => 'TEST_SHOPPER_REF',
+        'contribution_status_id:name'  => 'In Progress',
+        // You cannot set payment_processor_id:name - it picks the live one even though this is_test. So specificy it by ID:
+        'payment_processor_id'         => $this->testModePaymentProcessorConfig['id'],
+        'is_test'                      => TRUE,
+        'payment_instrument_id:name'   => 'Credit Card',
+        'payment_token_id'             => $paymentTokenID,
+      ])
+      ->execute()->single()['id'];
+
+
+    // Create initial contribution.
+    $cnID = civicrm_api3('Contribution', 'create', [
+      'contribution_recur_id'  => $crID,
+      'total_amount'           => 1.23,
+      'currency'               => 'EUR',
+      'contribution_status_id' => 'Completed', // xxx deprecated?
+      'invoice_id'             => $eventData['merchantReference'],
+      'trxn_id'                => $eventData['pspReference'],
+      'is_test'                => TRUE,
+      'receive_date'           => 'today',
+      'financial_type_id'      => 1,
+      'contact_id'             => $contactID,
+    ])['id'] ?? NULL;
+
+
+    // Call webhook
+    $handler = new \Civi\Adyen\WebhookEventHandler($eventData);
+    $result = $handler->run();
+    $this->assertInstanceOf(stdClass::class, $result);
+    $this->assertTrue($result->ok);
+    $this->assertNull($result->exception);
+
+    $this->assertStringStartsWith("OK. Matched existing contribution $cnID, invoice_id civi-mock-ref-1, trxn_id TQ9J3F3J7G9WHD82. Updated payment token details", $result->message);
+
+    // Load the payment token to check it has been updated.
+    $token = \Civi\Api4\PaymentToken::get(FALSE)
+    ->addWhere('id', '=', $paymentTokenID)
+    ->execute()->single();
+    $this->assertEquals('visa ... 1142', $token['masked_account_number']);
+    $this->assertEquals('2030-03-31 23:59:00', $token['expiry_date']);
+
+    // Repeat the webhook call - no updates should occur.
+    $handler = new \Civi\Adyen\WebhookEventHandler($eventData);
+    $result = $handler->run();
+    $this->assertInstanceOf(stdClass::class, $result);
+    $this->assertTrue($result->ok);
+    $this->assertNull($result->exception);
+
+    $this->assertEquals("OK. Matched existing contribution $cnID, invoice_id civi-mock-ref-1, trxn_id TQ9J3F3J7G9WHD82.", $result->message);
   }
 
   protected function loadFixtureData(string $filename) :array {
