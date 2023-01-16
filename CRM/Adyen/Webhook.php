@@ -18,8 +18,6 @@ use CRM_Adyen_ExtensionUtil as E;
  */
 class CRM_Adyen_Webhook {
 
-  use CRM_Mjwshared_WebhookTrait;
-
   /**
    * Checks whether the payment processors have a correctly configured webhook
    *
