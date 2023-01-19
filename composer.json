@@ -1,5 +1,19 @@
 {
-    "require": {
-        "adyen/php-api-library": "^11.0"
+  "name": "greenpeace-cee/adyen",
+  "description": "CiviCRM Payment Processor for Adyen",
+  "type": "project",
+  "license": "AGPL-3.0",
+  "authors": [
+    {
+      "name": "Patrick Figel",
+      "email": "pfigel@greenpeace.org"
+    },
+    {
+      "name": "Rich Lott / Artful Robot",
+      "email": "code.commits@artfulrobot.uk"
     }
+  ],
+  "require": {
+    "adyen/php-api-library": "^11.0"
+  }
 }

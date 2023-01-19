@@ -1,24 +1,26 @@
 <?xml version="1.0"?>
 <extension key="adyen" type="module">
   <file>adyen</file>
-  <name>Adyen payment processor</name>
-  <description>Payment processor for adyen.com</description>
+  <name>Adyen Payment Processor</name>
+  <description>Accept payments using Adyen</description>
   <license>AGPL-3.0</license>
   <maintainer>
-    <author>Matthew Wire</author>
-    <email>mjw@mjwconsult.co.uk</email>
+    <author>Patrick Figel</author>
+    <email>pfigel@greenpeace.org</email>
   </maintainer>
   <urls>
-    <url desc="Main Extension Page">https://github.com/mjwconsult/civicrm-adyen</url>
-    <url desc="Support">https://mjw.pt/support/adyen</url>
-    <url desc="Licensing">http://www.gnu.org/licenses/agpl-3.0.html</url>
+    <url desc="Main Extension Page">https://github.com/greenpeace-cee/adyen</url>
+    <url desc="Documentation">https://github.com/greenpeace-cee/adyen</url>
+    <url desc="Support">https://github.com/greenpeace-cee/adyen/issues</url>
+    <url desc="Licensing">https://www.gnu.org/licenses/agpl-3.0.html</url>
   </urls>
   <releaseDate>2022-05-15</releaseDate>
-  <version>0.1</version>
-  <develStage>alpha</develStage>
+  <version>0.2</version>
+  <develStage>beta</develStage>
   <compatibility>
     <ver>5.51</ver>
   </compatibility>
+  <comments/>
   <classloader>
     <psr4 prefix="Civi\" path="Civi"/>
   </classloader>
@@ -30,7 +32,8 @@
     <ext>mjwshared</ext>
   </requires>
   <mixins>
-    <mixin>mgd-php@1.0.0</mixin>
     <mixin>menu-xml@1.0.0</mixin>
+    <mixin>mgd-php@1.0.0</mixin>
+    <mixin>setting-php@1.0.0</mixin>
   </mixins>
 </extension>

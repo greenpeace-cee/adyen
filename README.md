@@ -1,4 +1,6 @@
-# adyen
+# Adyen Payment Processor
+
+[![CircleCI](https://circleci.com/gh/greenpeace-cee/adyen.svg?style=svg)](https://circleci.com/gh/greenpeace-cee/adyen)
 
 CiviCRM payment processor for integration with [Adyen](https://www.adyen.com/).
 
@@ -8,7 +10,7 @@ The extension is licensed under [AGPL-3.0](LICENSE.txt).
 
 Learn more about installing CiviCRM extensions in the [CiviCRM Sysadmin Guide](https://docs.civicrm.org/sysadmin/en/latest/customize/extensions/).
 
-This extension requires Payment Shared (https://lab.civicrm.org/extensions/mjwshared).
+This extension requires Payment Shared (https://lab.civicrm.org/extensions/mjwshared). Note that this dependency is fairly soft (except that it is specified in the info.xml) in that the only functionality of mjwshared that this uses is the webhook queuing, which is nice to have rather than strictly essential to the functioning.
 
 ## Setup
 
