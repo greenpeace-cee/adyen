@@ -23,7 +23,7 @@ class Civi_Adyen_Report_Parser_SettlementDetailTest extends \PHPUnit\Framework\T
       ->apply();
   }
 
-  public function setUp() {
+  public function setUp(): void {
     parent::setUp();
     $this->report = AdyenNotification::create()
       ->addValue('event_code_id', 1)
@@ -35,7 +35,7 @@ class Civi_Adyen_Report_Parser_SettlementDetailTest extends \PHPUnit\Framework\T
       ->first();
   }
 
-  public function tearDown() {
+  public function tearDown(): void {
     parent::tearDown();
   }
 

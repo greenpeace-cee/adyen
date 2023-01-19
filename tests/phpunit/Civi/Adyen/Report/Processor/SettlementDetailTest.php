@@ -25,7 +25,7 @@ class Civi_Adyen_Report_Processor_SettlementDetailTest extends \PHPUnit\Framewor
       ->apply(TRUE);
   }
 
-  public function setUp() {
+  public function setUp(): void {
     parent::setUp();
     $this->callAPISuccess('CustomGroup', 'create', [
       'title'                       => 'Contribution Information',
@@ -62,7 +62,7 @@ class Civi_Adyen_Report_Processor_SettlementDetailTest extends \PHPUnit\Framewor
       ->first();
   }
 
-  public function tearDown() {
+  public function tearDown(): void {
     parent::tearDown();
   }
 
