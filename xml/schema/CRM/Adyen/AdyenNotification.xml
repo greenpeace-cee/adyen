@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="iso-8859-1" ?>
+
+<table>
+  <base>CRM/Adyen</base>
+  <class>AdyenNotification</class>
+  <name>civicrm_adyen_notification</name>
+  <comment>List of Adyen notifications received via webhooks</comment>
+  <log>true</log>
+
+  <field>
+    <name>id</name>
+    <title>AdyenNotification ID</title>
+    <type>int unsigned</type>
+    <required>true</required>
+    <comment>Unique AdyenNotification ID</comment>
+  </field>
+  <primaryKey>
+    <name>id</name>
+    <autoincrement>true</autoincrement>
+  </primaryKey>
+
+  <field>
+    <name>event_code_id</name>
+    <title>Event Code</title>
+    <type>int unsigned</type>
+    <required>true</required>
+    <comment>ID of event code</comment>
+    <pseudoconstant>
+      <optionGroupName>adyen_notification_event_code</optionGroupName>
+    </pseudoconstant>
+    <html>
+      <type>Select</type>
+    </html>
+  </field>
+
+  <field>
+    <name>event_date</name>
+    <title>Event Date</title>
+    <type>datetime</type>
+    <required>true</required>
+    <comment>Date of the event</comment>
+    <html>
+      <type>Select Date</type>
+    </html>
+  </field>
+
+  <field>
+    <name>psp_reference</name>
+    <title>PSP Reference</title>
+    <type>varchar</type>
+    <length>255</length>
+    <required>true</required>
+    <comment>PSP Reference</comment>
+    <html>
+      <type>Text</type>
+    </html>
+  </field>
+
+  <field>
+    <name>merchant_account</name>
+    <title>Merchant Account</title>
+    <type>varchar</type>
+    <length>80</length>
+    <required>true</required>
+    <comment>Merchant Account</comment>
+    <html>
+      <type>Text</type>
+    </html>
+  </field>
+
+  <field>
+    <name>processing_order</name>
+    <title>Processing Order</title>
+    <type>int unsigned</type>
+    <required>false</required>
+    <comment>Processing Order</comment>
+  </field>
+
+  <field>
+    <name>status_id</name>
+    <title>Notification Status</title>
+    <type>int unsigned</type>
+    <required>true</required>
+    <comment>ID of notification status</comment>
+    <default>1</default>
+    <pseudoconstant>
+      <optionGroupName>adyen_notification_status</optionGroupName>
+    </pseudoconstant>
+    <html>
+      <type>Select</type>
+    </html>
+  </field>
+
+  <field>
+    <name>notification</name>
+    <title>Notification</title>
+    <type>longtext</type>
+    <serialize>JSON</serialize>
+    <required>true</required>
+    <comment>Adyen NotificationRequestItem (JSON)</comment>
+    <html>
+      <type>TextArea</type>
+      <rows>4</rows>
+      <cols>60</cols>
+    </html>
+  </field>
+</table>

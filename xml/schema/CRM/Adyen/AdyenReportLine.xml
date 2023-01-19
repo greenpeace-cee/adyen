@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="iso-8859-1" ?>
+
+<table>
+  <base>CRM/Adyen</base>
+  <class>AdyenReportLine</class>
+  <name>civicrm_adyen_report_line</name>
+  <comment>List of lines in an Adyen report</comment>
+  <log>true</log>
+
+  <field>
+    <name>id</name>
+    <type>int unsigned</type>
+    <required>true</required>
+    <comment>Unique AdyenReportLine ID</comment>
+  </field>
+  <primaryKey>
+    <name>id</name>
+    <autoincrement>true</autoincrement>
+  </primaryKey>
+
+  <field>
+    <name>adyen_notification_id</name>
+    <type>int unsigned</type>
+    <comment>FK to AdyenNotification</comment>
+  </field>
+  <foreignKey>
+    <name>adyen_notification_id</name>
+    <table>civicrm_adyen_notification</table>
+    <key>id</key>
+    <onDelete>CASCADE</onDelete>
+  </foreignKey>
+
+  <field>
+    <name>line_number</name>
+    <title>Line Number</title>
+    <type>int unsigned</type>
+    <required>true</required>
+    <comment>Line number in report file</comment>
+  </field>
+
+  <field>
+    <name>line_date</name>
+    <title>Line Date</title>
+    <type>datetime</type>
+    <required>false</required>
+    <comment>Date of the line</comment>
+    <html>
+      <type>Select Date</type>
+    </html>
+  </field>
+
+  <field>
+    <name>content</name>
+    <title>Content</title>
+    <type>longtext</type>
+    <serialize>JSON</serialize>
+    <required>true</required>
+    <comment>Adyen Report Line (JSON)</comment>
+    <html>
+      <type>TextArea</type>
+      <rows>4</rows>
+      <cols>60</cols>
+    </html>
+  </field>
+
+  <field>
+    <name>status_id</name>
+    <title>Report Line Status</title>
+    <type>int unsigned</type>
+    <required>true</required>
+    <comment>ID of report line status</comment>
+    <default>1</default>
+    <pseudoconstant>
+      <optionGroupName>adyen_report_line_status</optionGroupName>
+    </pseudoconstant>
+    <html>
+      <type>Select</type>
+    </html>
+  </field>
+
+  <index>
+    <name>UI_adyen_notification_line_number</name>
+    <fieldName>adyen_notification_id</fieldName>
+    <fieldName>line_number</fieldName>
+    <unique>true</unique>
+  </index>
+
+</table>

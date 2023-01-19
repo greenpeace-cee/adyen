@@ -294,5 +294,16 @@ function _adyen_civix_fixNavigationMenuItems(&$nodes, &$maxNavID, $parentID) {
  * @link https://docs.civicrm.org/dev/en/latest/hooks/hook_civicrm_entityTypes
  */
 function _adyen_civix_civicrm_entityTypes(&$entityTypes) {
-  $entityTypes = array_merge($entityTypes, []);
+  $entityTypes = array_merge($entityTypes, [
+    'CRM_Adyen_DAO_AdyenNotification' => [
+      'name' => 'AdyenNotification',
+      'class' => 'CRM_Adyen_DAO_AdyenNotification',
+      'table' => 'civicrm_adyen_notification',
+    ],
+    'CRM_Adyen_DAO_AdyenReportLine' => [
+      'name' => 'AdyenReportLine',
+      'class' => 'CRM_Adyen_DAO_AdyenReportLine',
+      'table' => 'civicrm_adyen_report_line',
+    ],
+  ]);
 }

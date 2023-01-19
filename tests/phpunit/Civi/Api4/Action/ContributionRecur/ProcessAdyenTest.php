@@ -1,4 +1,5 @@
 <?php
+namespace Civi\Api4\Action\ContributionRecur;
 
 // use CRM_Adyen_ExtensionUtil as E;
 use Civi\Test\HeadlessInterface;
@@ -28,14 +29,14 @@ if (!defined('ADYEN_PHPUNIT_TEST')) {
  *
  * @group headless
  */
-class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessInterface, HookInterface, TransactionalInterface {
+class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessInterface, HookInterface, TransactionalInterface {
 
 
   /** @var array holds the data for the test mode processor */
   public array $testModePaymentProcessorConfig;
 
-  /** @var CRM_Core_Payment_Adyen */
-  public CRM_Core_Payment_Adyen $testModePaymentProcessorObject;
+  /** @var \CRM_Core_Payment_Adyen */
+  public \CRM_Core_Payment_Adyen $testModePaymentProcessorObject;
 
 
   /**
@@ -142,7 +143,7 @@ class ContributionRecurProcessAdyenTest extends \PHPUnit\Framework\TestCase impl
     ])
     ->execute()->first();
 
-    /** @var CRM_Core_Payment_Adyen */
+    /** @var \CRM_Core_Payment_Adyen */
     $this->testModePaymentProcessorObject = \Civi\Payment\System::singleton()->getByProcessor($this->testModePaymentProcessorConfig);
 
     // Create a contact, PaymentToken, a ContributionRecur and a completed Contribution, simulating entities created by existing outside processes.

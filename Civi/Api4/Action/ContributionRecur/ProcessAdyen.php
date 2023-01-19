@@ -4,7 +4,9 @@ namespace Civi\Api4\Action\ContributionRecur;
 use Civi\Api4\ContributionRecur;
 use Civi\Api4\Contribution;
 use Civi\Api4\Generic\Result;
+use Civi\Core\Event\GenericHookEvent;
 use CRM_Core_Exception;
+use CRM_Core_Lock;
 use CRM_Core_Payment_Adyen;
 use CRM_Core_Transaction;
 use CRM_Contribute_BAO_ContributionRecur;
@@ -18,7 +20,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   public function _run(Result $result) {
 
     // Try to get a server-wide lock for this process, be patient for 90s.
-    $lock = new \CRM_Core_Lock('worker.contribute.processadyen', 90, TRUE);
+    $lock = new CRM_Core_Lock('worker.contribute.processadyen', 90, TRUE);
     $lock->acquire();
     if (!$lock->isAcquired()) {
       throw new CRM_Core_Exception("Failed to get a lock to process Adyen contributions. Try later.");
@@ -88,7 +90,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     $cnDate = $cr['next_sched_contribution_date'];
 
     // Set the next collection date
-    $event = \Civi\Core\Event\GenericHookEvent::create(
+    $event = GenericHookEvent::create(
       [
         'originalDate'          => $cnDate,
         'newDate'               => date('Y-m-d H:i:s', strtotime("$cnDate + $cr[frequency_interval] $cr[frequency_unit]")),
@@ -146,7 +148,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
 
     // We can not supply an invoice_id to repeattransaction, and anyway we want to use the Contribution ID
     // which hadn't existed at that point. This invoice_id will be passed to Adyen as a merchantReference.
-    \Civi\Api4\Contribution::update(FALSE)
+    Contribution::update(FALSE)
     ->addWhere('id', '=', $cnPending['id'])
     ->addValue('invoice_id', "CiviCRM-cn{$cnPending['id']}-cr{$cr['id']}")
     ->execute();

@@ -4,7 +4,7 @@ use Civi\Api4\AdyenNotification;
 use Civi\Adyen\Report\Parser\SettlementDetail;
 use Civi\Api4\AdyenReportLine;
 use Civi\Test\HeadlessInterface;
-use Civi\Test\HookInterface;
+use Civi\Core\HookInterface;
 use Civi\Test\TransactionalInterface;
 
 /**
@@ -19,6 +19,7 @@ class Civi_Adyen_Report_Parser_SettlementDetailTest extends \PHPUnit\Framework\T
 
   public function setUpHeadless() {
     return \Civi\Test::headless()
+      ->install('mjwshared')
       ->installMe(__DIR__)
       ->apply();
   }
