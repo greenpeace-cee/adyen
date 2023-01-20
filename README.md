@@ -46,8 +46,7 @@ Currently it loads with a fixed amount (EUR 10).
 
 - The webhook checks do not work - it is supposed to authorize using the X-API-Key but returns 401 unauthorized when getting the list of webhooks.
 
-- We currently *only* process the AUTHORISATION webhook.
-- This extension (https://github.com/greenpeace-cee/adyen-settlement) has code to process the `SETTLEMENT_REPORT` and we plan to merge that extension into this one.
+- We currently *only* process the `AUTHORISATION` and `SETTLEMENT_REPORT` webhooks.
 - In Adyen dashboard -> Webhooks there is a "Settings" button.
   Click on that to enable "Delayed Capture" notifications so that we can process "CAPTURE" notifications.
   Not sure if this will work!

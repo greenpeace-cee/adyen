@@ -1,5 +1,7 @@
 # Discussion
 
+Discussion pages talk around the subject; they're useful background.
+
 ## The sorry state of contribution APIs.
 
 We have, as of CiviCRM 5.52
@@ -34,3 +36,27 @@ We have, as of CiviCRM 5.52
 - Here we have gone with the way things should be used, and will put in tests and guards around whether that's doing the right thing.
 
 
+## Annoyances
+
+Core’s design for recording a one off contribution is:
+
+- Order.create with CN data + line items (in a weird nested array),
+- Payment.create
+- IRL: some hacks to properly set things core didn't.
+
+And for a recur where there's a pending:
+
+- Custom CN.create calls to update it as needed.
+- Payment.create
+- IRL: some hacks to properly set things core didn't.
+
+And for a recur where there’s not a pending:
+
+- CN.repeattransaction
+- IRL: some hacks to properly set things core didn't.
+- Payment.create
+- IRL: some hacks to properly set things core didn't.
+
+How to record failed payment attempts?
+<https://chat.civicrm.org/civicrm/pl/di9o7b8sifypu8iw3xmxxskzqr>
+Note that the way we do it is to leave a failed Contribution instaed of failing the payment.

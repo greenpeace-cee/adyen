@@ -58,52 +58,52 @@ A PSP reference is Adyen's unique 16-character reference for this payment, or mo
    * `payment_processor_id`
 
 
-## How taking payments happens (plan) @todo UPDATE
+## How taking new recurring payments happens API4 `ContributionRecur.ProcessAdyen` calls
 
 ```mermaid
 flowchart TD
 
 al(Acquire lock)
-al-->findCrs
-findCrs("Find ContributionRecurs<br>(In Progress, Adyen, Active, <br>Next Scheduled >= today) ")
+al-->createPending
+
+subgraph createPending ["Generate Pending Contributions"]
+findCrs("Find ContributionRecurs<br>(Adyen, Active processor, <br>In Progress and Next Scheduled due<br>or<br>Failing/Overdue and failure_retry_date due) ")
 findCrs --> eachCR
 
-subgraph eachCR [Each CR]
+subgraph eachCR ["Each CR"]
   beginTrans1("Begin Transaction")
   beginTrans1-->updateCr1("Update Next Scheduled date")
   updateCr1-->cnCreate1("Create new pending contribution<br>(use template, repeattransaction)")
-  cnCreate1-->commitTrans1("Commit Transaction")
+  cnCreate1-->commitTrans1("Commit Transaction, collect ID of created pending Contribution")
+end
 end
 
-eachCR --> findCns
+eachCR --> doPendings
 
-findCns("Find Contributions<br>(Pending, CR:Adyen)")
+subgraph doPendings ["Process Pending Contributions"]
+
+findCns("Find Contributions<br>(Pending, CR:PP:Adyen, CR:PP:active,<br> CR:status In Progress, Failing, Overdue<Br>CT:not deleted or deceased)")
 findCns-->eachCN
 subgraph eachCN [Each CN]
   attemptPayment{{"Attempt Payment"}}
   attemptPayment-->|Success|payOk(Complete CN via Payment.create)
-  payOk-->resetFails("Reset CR.failure_count to zero")
-  attemptPayment-->|Problem|incErrors("Increment CR.failure_count<br>")
-  incErrors-->tooFaily{{"Too many failures or Permanent Error"}}
-  tooFaily-->|yes|payBad("Update CN.status = Failed<br>Update CR.status = Failed<br>Set any other pending CNs to Cancelled")
-  tooFaily-->|no|payMeh("Record (activity?) failed attempt<br>leave CN.status pending")
-  payMeh-->endCN
-  payBad-->endCN
+  payOk-->resetFails("Reset CR.failure_count to zero, <br>status to In Progress,<br>failure_retry_date to null")
+  attemptPayment-->|Problem|incErrors("Increment CR.failure_count<br>Set status Failing")
+  incErrors-->failCn("Set CN.status = Failed")
+  failCn-->policy{{"What is configured policy?"}}
+  policy-->|Retry after delay|retry("Set failure_retry_date<br>to calculated date")
+  retry-->endCN
+  policy-->|Skip this one|skip("Set failure_retry_date NULL")
+  skip-->endCN
+  policy-->|Fail|failPol("Set CR status to Failed, cancel_date = today")
+  failPol-->endCN
+
   resetFails-->endCN
   endCN([End of Contribution processing])
 end
 
+end
 eachCN-->releaseLock("Release lock")
+
 ```
 
-- The process is split into two loops. It would make sense for it to run daily.
-- The first loop creates Pending Contributions for each due ContributionRecur tracked by the CR's next scheduled date field.
-   - A transaction is used so that the next scheduled date only advances after a successful CN creation.
-- The second loop attempts to process all the pending contributions one by one.
-   - Successful contributions are recorded
-   - Soft failures leave the pending CN as was, so it will be retried next run.
-   - An improvement in this loop might be to collect failed CR IDs, and skip processing CNs that belong to CRs that have failed today (e.g. lack of funds).
-   - If a CR fails too much, the contribution is marked Failed as is the CR (preventing any new contributions being created from it), and any CNs are also failed.
-
-@todo: How to record failed attempts?
-<https://chat.civicrm.org/civicrm/pl/di9o7b8sifypu8iw3xmxxskzqr>
