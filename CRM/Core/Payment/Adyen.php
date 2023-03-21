@@ -188,6 +188,22 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
     return $result;
   }
 
+  /**
+   * Get stored payment details for $shopperReference
+   *
+   * @param string $shopperReference
+   *
+   * @return mixed
+   * @throws \Adyen\AdyenException
+   */
+  public function getStoredPaymentMethod(string $shopperReference) {
+    $checkout = new \Adyen\Service\Checkout($this->client);
+    return $checkout->paymentMethods([
+      'merchantAccount' => $this->getMerchantAccount(),
+      'shopperReference' => $shopperReference,
+    ]);
+  }
+
 
   /**
    * Allow mocking services in tests.
