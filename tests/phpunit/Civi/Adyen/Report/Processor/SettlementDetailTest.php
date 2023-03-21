@@ -23,7 +23,7 @@ class Civi_Adyen_Report_Processor_SettlementDetailTest extends \PHPUnit\Framewor
     return \Civi\Test::headless()
       ->install('mjwshared')
       ->installMe(__DIR__)
-      ->apply();
+      ->apply(TRUE);
   }
 
   public function setUp(): void {

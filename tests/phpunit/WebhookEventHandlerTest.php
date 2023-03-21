@@ -109,7 +109,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
     $eventData = $this->loadFixtureData('webhook-ignored-type.json');
     $handler = new \Civi\Adyen\WebhookEventHandler($eventData);
     $result = $handler->run();
-    $this->assertTrue($result->ok);
+    $this->assertEquals('success', $result->status);
     $this->assertEquals('Event ignored (normal - we do not process "SOME_NON_REQUIRED_TYPE" events)', $result->message);
   }
 
@@ -121,7 +121,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
     $handler = new \Civi\Adyen\WebhookEventHandler($eventData);
     $result = $handler->run();
     $this->assertInstanceOf(stdClass::class, $result);
-    $this->assertTrue($result->ok);
+    $this->assertEquals('success', $result->status);
     $this->assertNull($result->exception);
 
     $this->assertEquals(1, preg_match('/^OK\. Created new contribution (\d+), invoice_id civi-mock-ref-1, trxn_id TQ9J3F3J7G9WHD82\./', $result->message, $matches));
@@ -197,7 +197,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
     $handler = new \Civi\Adyen\WebhookEventHandler($eventData);
     $result = $handler->run();
     $this->assertInstanceOf(stdClass::class, $result);
-    $this->assertTrue($result->ok);
+    $this->assertEquals('success', $result->status);
     $this->assertNull($result->exception);
 
     $this->assertStringStartsWith("OK. Matched existing contribution $cnID, invoice_id civi-mock-ref-1, trxn_id TQ9J3F3J7G9WHD82. Updated payment token details", $result->message);
@@ -213,10 +213,28 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
     $handler = new \Civi\Adyen\WebhookEventHandler($eventData);
     $result = $handler->run();
     $this->assertInstanceOf(stdClass::class, $result);
-    $this->assertTrue($result->ok);
+    $this->assertEquals('success', $result->status);
     $this->assertNull($result->exception);
 
     $this->assertEquals("OK. Matched existing contribution $cnID, invoice_id civi-mock-ref-1, trxn_id TQ9J3F3J7G9WHD82.", $result->message);
+  }
+
+  /**
+   * Test that an AUTHORISED webhook with unmatchedContributionBehaviour=retry does not create new contributions
+   */
+  public function testAuthorisedRetry(): void {
+    $eventData = $this->loadFixtureData('webhook-authorised.json');
+    $handler = new \Civi\Adyen\WebhookEventHandler($eventData, ['unmatchedContributionBehaviour' => 'retry']);
+    $result = $handler->run();
+    $this->assertInstanceOf(stdClass::class, $result);
+    $this->assertEquals('new', $result->status);
+    $this->assertNull($result->exception);
+
+    $cn = \Civi\Api4\Contribution::get(FALSE)
+      ->selectRowCount()
+      ->addWhere('invoice_id', '=', 'civi-mock-ref-1')
+      ->execute();
+    $this->assertEquals(0, $cn->count(), 'Should not create contribution');
   }
 
   protected function loadFixtureData(string $filename) :array {
