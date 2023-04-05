@@ -27,7 +27,8 @@ Then you need to add a JSON-formatted configuration for the other parameters:
     "0": "key1",
     "1": "key2"
   },
-  "retryPolicy": [ "+1 day", ... ]
+  "retryPolicy": [ "+1 day", ... ],
+  "unmatchedContributionBehaviour": "create"
 }
 ```
 
@@ -38,6 +39,10 @@ Then you need to add a JSON-formatted configuration for the other parameters:
    - `+<N> <period>` e.g. `+1 day` or `+2 weeks`: when to retry, relative to the last attempt
    - `"skip"` means do not re-attempt this payment, wait for next cycle.
    - `"fail"` means mark the recurring contribution Failed; no further attempts will be made now or in the future.
+- `unmatchedContributionBehaviour` (optional) is used to change the behaviour when receiving webhooks for contributions that do not exist:
+   - `create` (default) will create a new contribution (and find or create the corresponding contact)
+   - `retry` will add the webhook back to the queue and retry processing at a later point; this is useful if payments are
+     primarily collected outside of CiviCRM and sent to CiviCRM later on.
 
 ## Known issues
 

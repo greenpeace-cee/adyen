@@ -4,6 +4,7 @@ namespace Civi\Adyen;
 use Civi\Api4\Contact;
 use Civi\Api4\Contribution;
 use Civi\Api4\Email;
+use http\Exception\InvalidArgumentException;
 use StdClass;
 
 /**
@@ -18,6 +19,11 @@ class WebhookEventHandler {
    * The raw event array
    */
   protected array $eventData;
+
+  /**
+   * @var array PaymentProcessor extra config
+   */
+  protected array $extraConfig;
 
   /**
    * The CiviCRM contact ID that maps to the customer
@@ -51,12 +57,13 @@ class WebhookEventHandler {
   /**
    * Create a new handler.
    */
-  public function __construct(array $eventData) {
+  public function __construct(array $eventData, array $extraConfig = []) {
     if (empty($eventData['eventCode'])) {
       throw new \InvalidArgumentException("Adyen events must contain a 'eventCode' key holding the event type.");
     }
 
     $this->eventData = $eventData;
+    $this->extraConfig = $extraConfig;
   }
 
   /**
@@ -65,7 +72,7 @@ class WebhookEventHandler {
   public function run(): StdClass {
 
     $return = (object) [
-      'ok' => TRUE,
+      'status' => 'success',
       'message' =>  '',
       'exception' => NULL
     ];
@@ -76,11 +83,21 @@ class WebhookEventHandler {
         break;
 
       default:
+
         throw new WebhookEventIgnoredException(ts('Event ignored (normal - we do not process "%1" events)', [1 => $this->eventData['eventCode']]));
       }
     }
     catch (WebhookEventIgnoredException $e) {
       $return->message = $e->getMessage();
+    }
+    catch (WebhookEventRetryException $e) {
+      $return->status = 'new';
+      $return->message = $e->getMessage();
+    }
+    catch (\Exception $e) {
+      $return->status = 'error';
+      $return->message = $e->getMessage();
+      $return->exception = $e;
     }
     return $return;
   }
@@ -219,9 +236,19 @@ class WebhookEventHandler {
       ->execute()
       ->first();
     if (empty($contribution)) {
-      $this->identifyContactFromEvent();
-      $contribution = $this->createNewContributionFromAuthorizedPayment();
-      $message = "OK. Created new contribution";
+      switch ($this->extraConfig['unmatchedContributionBehaviour'] ?? 'create') {
+        case 'retry':
+          throw new WebhookEventRetryException('Cannot find contribution with invoice_id=' . $invoiceID);
+
+        case 'create':
+          $this->identifyContactFromEvent();
+          $contribution = $this->createNewContributionFromAuthorizedPayment();
+          $message = "OK. Created new contribution";
+          break;
+
+        default:
+          throw new \InvalidArgumentException("Invalid value '{$this->extraConfig['unmatchedContributionBehaviour']}' for unmatchedContributionBehaviour");
+      }
     }
     else {
       // Found contribution, store the contact ID

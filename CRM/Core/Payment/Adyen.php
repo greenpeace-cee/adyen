@@ -107,7 +107,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
     return $policy;
   }
 
-  private function getExtraConfig() {
+  public function getExtraConfig() {
     $parsed = json_decode($this->_paymentProcessor['signature'] ?? NULL, TRUE);
     return $parsed ?? [];
   }

@@ -189,19 +189,22 @@ class CRM_Core_Payment_AdyenIPN {
    * @throws \Civi\API\Exception\UnauthorizedException
    */
   public function processQueuedWebhookEvent(array $webhookEvent) :bool {
-
     $eventData = json_decode($webhookEvent['data'], TRUE);
-    $processor = new WebhookEventHandler($eventData);
+    $processor = new WebhookEventHandler($eventData, $this->getPaymentProcessor()->getExtraConfig());
     $processingResult = $processor->run();
 
     // Update the stored webhook event.
     PaymentprocessorWebhook::update(FALSE)
       ->addWhere('id', '=', $webhookEvent['id'])
-      ->addValue('status', $processingResult->ok ? 'success' : 'error')
+      ->addValue('status', $processingResult->status)
       ->addValue('message', preg_replace('/^(.{250}).*/su', '$1 ...', $processingResult->message))
       ->addValue('processed_date', 'now')
       ->execute();
 
-    return $processingResult->ok;
+    if (!empty($processingResult->exception)) {
+      \Civi::log()->error('Adyen webhook processing failed: ' . $processingResult->exception->getMessage());
+    }
+
+    return $processingResult->status == 'success';
   }
 }
