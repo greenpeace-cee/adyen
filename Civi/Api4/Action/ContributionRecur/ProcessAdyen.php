@@ -219,8 +219,8 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
         'trxn_id'                           => $result['pspReference'],
         'trxn_date'                         => date('Y-m-d H:i:s'),
         'is_send_contribution_notification' => FALSE, /* @todo? */
-        // trxn_result_code ?
-        // order_reference ?
+        'card_type_id'                      => $this->getCardType($result),
+        'pan_truncation'                    => $this->getPanTruncation($result),
       ];
       $result = civicrm_api3('Payment', 'create', $paymentCreateParams);
       $returnValue = TRUE;
@@ -279,5 +279,36 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     ->execute();
 
     return $returnValue;
+  }
+
+  private function getCardType(array $result) {
+    if (empty($result['additionalData']['paymentMethod'])) {
+      return NULL;
+    }
+    $cardTypeName = $result['additionalData']['paymentMethod'];
+    // Adyen abbreviates mastercard, everything else matches
+    if ($cardTypeName == 'mc') {
+      $cardTypeName = 'mastercard';
+    }
+    // perform lookup via API4 to avoid case mismatches from cached OptionValues
+    $cardType = \Civi\Api4\OptionValue::get(FALSE)
+      ->addSelect('value')
+      ->addWhere('option_group_id:name', '=', 'accept_creditcard')
+      ->addWhere('name', '=', $cardTypeName)
+      ->execute()
+      ->first();
+    return $cardType['value'] ?? NULL;
+  }
+
+  private function getPanTruncation(array $result) {
+    if (!empty($result['additionalData']['cardSummary'])) {
+      // cardSummary contains last 4 digits for credit card
+      return $result['additionalData']['cardSummary'];
+    }
+    if (!empty($result['additionalData']['iban'])) {
+      // return last 4 digits of IBAN if one is available
+      return substr($result['additionalData']['iban'], -4);
+    }
+    return NULL;
   }
 }

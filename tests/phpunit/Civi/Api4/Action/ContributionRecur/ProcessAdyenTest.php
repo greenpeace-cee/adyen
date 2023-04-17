@@ -364,11 +364,15 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
 
   /**
    * Simple test: a payment is due, and successfully submitted. Repeating the call should do nothing.
-   *
-   */
+   *   */
   public function testPaymentDueAndSuccessful():void {
 
-    $this->mockAdyenCheckoutPayments([]);
+    $this->mockAdyenCheckoutPayments([
+      'additionalData' => [
+        'paymentMethod' => 'visa',
+        'cardSummary' => '1234',
+      ]
+    ]);
 
     // Call SUT
     $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
@@ -377,9 +381,11 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     $this->assertArrayHasKey('newPending', $result);
     $this->assertArrayHasKey($this->crID, $result['newPending'], "Expect that there is a new contribution created for the CR but none was.");
     $contrib = Contribution::get(FALSE)
+    ->addJoin('EntityFinancialTrxn AS entity_financial_trxn', 'LEFT', ['entity_financial_trxn.entity_table', '=', "'civicrm_contribution'"], ['entity_financial_trxn.entity_id', '=', 'id'])
+    ->addJoin('FinancialTrxn AS financial_trxn', 'LEFT', ['financial_trxn.id', '=', 'entity_financial_trxn.financial_trxn_id'])
     ->addWhere('id', '=', $result['newPending'][$this->crID])
     ->addWhere('is_test', 'IN', [0, 1])
-    ->addSelect('receive_date', 'contribution_status_id:name', 'total_amount', 'trxn_id', 'contribution_recur_id', 'invoice_id', 'invoice_number')
+    ->addSelect('receive_date', 'contribution_status_id:name', 'total_amount', 'trxn_id', 'contribution_recur_id', 'invoice_id', 'invoice_number', 'financial_trxn.pan_truncation', 'financial_trxn.card_type_id:name')
     ->execute()->single();
     $this->assertEquals($this->crID, $contrib['contribution_recur_id']);
     $this->assertEquals('Completed', $contrib['contribution_status_id:name']);
@@ -389,6 +395,8 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     $this->assertEquals("CiviCRM-cn{$contrib['id']}-cr{$this->crID}", $contrib['invoice_id']);
     // Adyen's pspReference is saved as our trxn_id
     $this->assertEquals('DummyPspRef1', $contrib['trxn_id']); // from the payment
+    $this->assertEquals('1234', $contrib['financial_trxn.pan_truncation']);
+    $this->assertEquals('Visa', $contrib['financial_trxn.card_type_id:name']);
 
     // Check that the recur was updated correctly.
     $recur = \Civi\Api4\ContributionRecur::get(FALSE)
