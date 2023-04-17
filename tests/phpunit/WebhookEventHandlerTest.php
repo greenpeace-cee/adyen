@@ -152,7 +152,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
       'contact_id' => $contactID,
       'payment_processor_id' => $this->testModePaymentProcessorConfig['id'],
       'expiry_date' => date('Ymd', strtotime('now + 1 year')),
-      'masked_account_number' => 'visa ... 4242',
+      'masked_account_number' => 'Visa: 4242',
       'token' => '1234567890',
     ])
     ->execute()->first()['id'];
@@ -206,7 +206,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
     $token = \Civi\Api4\PaymentToken::get(FALSE)
     ->addWhere('id', '=', $paymentTokenID)
     ->execute()->single();
-    $this->assertEquals('visa ... 1142', $token['masked_account_number']);
+    $this->assertEquals('Visa: 1142', $token['masked_account_number']);
     $this->assertEquals('2030-03-31 23:59:00', $token['expiry_date']);
 
     // Repeat the webhook call - no updates should occur.

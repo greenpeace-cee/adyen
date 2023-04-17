@@ -272,7 +272,8 @@ class WebhookEventHandler {
       if (!empty($result['payment_token_id.id'])) {
         // We have the payment token for this recur.
         $updates = [];
-        $expectedCardDetails = "{$this->eventData['additionalData']['paymentMethod']} ... {$this->eventData['additionalData']['cardSummary']}";
+        $paymentMethod = ucfirst($this->eventData['additionalData']['paymentMethod']);
+        $expectedCardDetails = "{$paymentMethod}: {$this->eventData['additionalData']['cardSummary']}";
         if ($expectedCardDetails !== $result['payment_token_id.masked_account_number']) {
           $updates['masked_account_number'] = $expectedCardDetails;
         }
