@@ -415,13 +415,17 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
    */
   public function testPaymentDueButFails():void {
 
-    $this->mockAdyenCheckoutPayments(['resultCode' => 'Refused', 'pspReference' => NULL]);
+    $this->mockAdyenCheckoutPayments([
+      'resultCode' => 'Refused',
+      'pspReference' => NULL,
+      'refusalReasonCode' => 2
+    ]);
 
     // Call SUT
     $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
 
     // Check that a contribution was created correctly
-    $this->assertFailedContribution($result);
+    $this->assertFailedContribution($result, 'AD02');
 
     // Check that the recur was updated correctly.
     $recur = \Civi\Api4\ContributionRecur::get(FALSE)
@@ -568,13 +572,13 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     $this->assertEquals(['newPending' => [], 'contributionsProcessed' => []], $result);
   }
 
-  protected function assertFailedContribution(array $result) {
+  protected function assertFailedContribution(array $result, $cancelReason = NULL) {
     $this->assertArrayHasKey('newPending', $result);
     $this->assertArrayHasKey($this->crID, $result['newPending'], "Expect that there is a new contribution created for the CR but none was.");
     $contrib = Contribution::get(FALSE)
     ->addWhere('id', '=', $result['newPending'][$this->crID])
     ->addWhere('is_test', 'IN', [0, 1])
-    ->addSelect('receive_date', 'contribution_status_id:name', 'total_amount', 'trxn_id', 'contribution_recur_id', 'invoice_id', 'invoice_number')
+    ->addSelect('receive_date', 'contribution_status_id:name', 'total_amount', 'trxn_id', 'contribution_recur_id', 'invoice_id', 'invoice_number', 'cancel_reason', 'cancel_date')
     ->execute()->single();
     $this->assertEquals($this->crID, $contrib['contribution_recur_id']);
     $this->assertEquals('Failed', $contrib['contribution_status_id:name']);
@@ -584,6 +588,10 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     $this->assertEquals("CiviCRM-cn{$contrib['id']}-cr{$this->crID}", $contrib['invoice_id']);
     // Adyen's pspReference is normally saved as our trxn_id, but not when it fails.
     $this->assertEmpty($contrib['trxn_id']);
+    $this->assertNotEmpty($contrib['cancel_date']);
+    if (!empty($cancelReason)) {
+      $this->assertEquals($cancelReason, $contrib['cancel_reason']);
+    }
 
   }
 

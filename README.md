@@ -43,6 +43,7 @@ Then you need to add a JSON-formatted configuration for the other parameters:
    - `create` (default) will create a new contribution (and find or create the corresponding contact)
    - `retry` will add the webhook back to the queue and retry processing at a later point; this is useful if payments are
      primarily collected outside of CiviCRM and sent to CiviCRM later on.
+- `failedContributionStatus` (optional, defaults to "Failed") is the contribution status that is used when a payment failed
 
 ## Known issues
 

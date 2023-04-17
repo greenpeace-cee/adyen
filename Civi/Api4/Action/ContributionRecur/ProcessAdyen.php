@@ -243,7 +243,9 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       // Mark this Contribution as failed.
       Contribution::update(FALSE)
         ->addWhere('id', '=', $contribution['id'])
-        ->addValue('contribution_status_id:name', 'Failed')
+        ->addValue('contribution_status_id:name', $paymentProcessor->getExtraConfig()['failedContributionStatus'] ?? 'Failed')
+        ->addValue('cancel_reason', 'AD' . str_pad($result['refusalReasonCode'] ?? '00', 2, '0', STR_PAD_LEFT))
+        ->addValue('cancel_date', 'now')
         ->execute();
 
       $crUpdates = [
