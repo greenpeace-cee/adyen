@@ -178,7 +178,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
     ];
 
     $result = $service->payments($params);
-    if (($result['resultCode'] ?? '') === 'Authorized') {
+    if (in_array($result['resultCode'] ?? '', ['Received', 'Authorized'])) {
       // Looks good. The caller should store pspReference as a trxn id.
       $result['success'] = TRUE;
     }
