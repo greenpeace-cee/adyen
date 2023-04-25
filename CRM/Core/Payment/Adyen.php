@@ -158,7 +158,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
     $params = [
       'amount'        => [
         'currency' => $contribution['currency'],
-        'value'    => $contribution['total_amount'],
+        'value'    => $contribution['total_amount'] * 100,
       ],
       'reference'     => $contribution['invoice_id'],
       'paymentMethod' => [
