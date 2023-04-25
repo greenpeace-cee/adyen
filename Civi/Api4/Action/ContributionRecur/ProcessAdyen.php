@@ -262,6 +262,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       elseif ($activePolicy === 'skip') {
         \Civi::log()->notice("[adyen] Not scheduling a retry for failed contribution $contribution[id], we will try again next cycle.");
         $crUpdates['failure_retry_date'] = NULL;
+        unset($crUpdates['contribution_status_id:name']);
       }
       elseif ($activePolicy === 'fail') {
         \Civi::log()->warning("[adyen] Marking recurring contribution Failed; no further retries or future payment attempts will be made.");

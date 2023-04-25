@@ -523,7 +523,7 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     ->execute()->single();
     $this->assertEquals([
       'id' => $this->crID,
-      'contribution_status_id:name' => 'Failing',
+      'contribution_status_id:name' => 'In Progress',
       'amount' => 1.23,
       'failure_retry_date' => NULL,
       'failure_count' => 3,
