@@ -146,11 +146,14 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     }
     $cnPending = civicrm_api3('Contribution', 'repeattransaction', $repeattransactionParams);
 
+    /** @var CRM_Core_Payment_Adyen $paymentProcessor */
+    $paymentProcessor = \Civi\Payment\System::singleton()->getById($cr['payment_processor_id']);
+    $invoicePrefix = $paymentProcessor->getExtraConfig()['invoicePrefix'] ?? 'CiviCRM';
     // We can not supply an invoice_id to repeattransaction, and anyway we want to use the Contribution ID
     // which hadn't existed at that point. This invoice_id will be passed to Adyen as a merchantReference.
     Contribution::update(FALSE)
     ->addWhere('id', '=', $cnPending['id'])
-    ->addValue('invoice_id', "CiviCRM-cn{$cnPending['id']}-cr{$cr['id']}")
+    ->addValue('invoice_id', "{$invoicePrefix}-cn{$cnPending['id']}-cr{$cr['id']}")
     ->execute();
 
     return (int) $cnPending['id'];

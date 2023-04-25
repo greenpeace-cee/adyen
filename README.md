@@ -28,7 +28,9 @@ Then you need to add a JSON-formatted configuration for the other parameters:
     "1": "key2"
   },
   "retryPolicy": [ "+1 day", ... ],
-  "unmatchedContributionBehaviour": "create"
+  "unmatchedContributionBehaviour": "create",
+  "failedContributionStatus": "Failed",
+  "invoicePrefix": "CiviCRM"
 }
 ```
 
@@ -44,6 +46,7 @@ Then you need to add a JSON-formatted configuration for the other parameters:
    - `retry` will add the webhook back to the queue and retry processing at a later point; this is useful if payments are
      primarily collected outside of CiviCRM and sent to CiviCRM later on.
 - `failedContributionStatus` (optional, defaults to "Failed") is the contribution status that is used when a payment failed
+- `invoicePrefix` (optional, defaults to "CiviCRM") is the prefix used when generating invoice IDs
 
 ## Known issues
 
