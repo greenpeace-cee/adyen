@@ -14,8 +14,8 @@
     <url desc="Support">https://github.com/greenpeace-cee/adyen/issues</url>
     <url desc="Licensing">https://www.gnu.org/licenses/agpl-3.0.html</url>
   </urls>
-  <releaseDate>2022-05-15</releaseDate>
-  <version>0.2</version>
+  <releaseDate>2023-04-25</releaseDate>
+  <version>0.2-beta.1</version>
   <develStage>beta</develStage>
   <compatibility>
     <ver>5.51</ver>
