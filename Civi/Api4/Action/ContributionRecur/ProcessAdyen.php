@@ -224,6 +224,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
         'is_send_contribution_notification' => FALSE, /* @todo? */
         'card_type_id'                      => $this->getCardType($result),
         'pan_truncation'                    => $this->getPanTruncation($result),
+        'payment_processor_id'              => $paymentProcessorID,
       ];
       $result = civicrm_api3('Payment', 'create', $paymentCreateParams);
       $returnValue = TRUE;
