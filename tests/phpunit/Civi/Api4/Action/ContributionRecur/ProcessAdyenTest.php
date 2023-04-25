@@ -619,7 +619,7 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
         $m = $this->createMock(\Adyen\Service\Checkout::class);
         $m->method('payments')
           ->willReturn($result + [
-            'resultCode' => 'Authorized',
+            'resultCode' => 'Authorised',
             'pspReference' => 'DummyPspRef1',
           ]);
         return $m;
