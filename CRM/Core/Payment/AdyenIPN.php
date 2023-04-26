@@ -198,7 +198,7 @@ class CRM_Core_Payment_AdyenIPN {
       ->addWhere('id', '=', $webhookEvent['id'])
       ->addValue('status', $processingResult->status)
       ->addValue('message', preg_replace('/^(.{250}).*/su', '$1 ...', $processingResult->message))
-      ->addValue('processed_date', 'now')
+      ->addValue('processed_date', ($processingResult->status == 'new' ? NULL : 'now'))
       ->execute();
 
     if (!empty($processingResult->exception)) {
