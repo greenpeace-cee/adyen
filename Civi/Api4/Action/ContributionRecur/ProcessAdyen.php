@@ -114,15 +114,16 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     }
     $cnStatus = CRM_Contribute_BAO_Contribution::buildOptions('contribution_status_id', 'validate')[$cn['contribution_status_id']];
     switch ($cnStatus) {
-    case "Template":
-    case "Completed":
-      break;
-    case "Pending":
-      \Civi::log()->warning("[adyen]: ContributionRecur $cr[id] is due for another Contribution ($cnDate), but there is already a pending one (id:$cn[id], $cn[receive_date]). We will not create another pending contribution until that one is Completed.");
-      return 0;
-    default:
-      // @todo implement some handling.
-      throw new CRM_Core_Exception("Failed to find a suitable contribution to copy to create next scheduled contribution on ContributionRecur $cr[id]. getTemplateContribution returned one in status '$cnStatus'");
+      case "Template":
+      case "Completed":
+      case "Cancelled":
+        break;
+      case "Pending":
+        \Civi::log()->warning("[adyen]: ContributionRecur $cr[id] is due for another Contribution ($cnDate), but there is already a pending one (id:$cn[id], $cn[receive_date]). We will not create another pending contribution until that one is Completed.");
+        return 0;
+      default:
+        // @todo implement some handling.
+        throw new CRM_Core_Exception("Failed to find a suitable contribution to copy to create next scheduled contribution on ContributionRecur $cr[id]. getTemplateContribution returned one in status '$cnStatus'");
     }
 
     // @see docs/discussion/index.md
