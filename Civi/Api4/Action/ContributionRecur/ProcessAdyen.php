@@ -133,17 +133,13 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       'receive_date'             => $cnDate,
       'is_test'                  => $cr['is_test'],
     ];
-    // The total_amount: normally the same as the last contribution, unless
-    // they have upgraded, in which case it should be the same as the Recur's
-    // amount, which, if it exists should be the same as the Template
-    // contribution's amount. Phew.
-    if ($cnStatus === 'Completed' && $cr['amount'] !== $cn['total_amount']) {
-      // Handle the case where the CR has been updated yet we're relying on the last Completed Contribution
-      // for repeattransactionParams. Note that this is not ideal because the line items will no longer add
-      // up to the total, leading to the qty field being adjusted to force a fit. To allow for upgrades, we
-      // should begin using template contribututions; i.e. this code is hopefully redundant.
+    // unless there is a contribution template for this Recur, use the amount
+    // and payment instrument from the Recur
+    if ($cnStatus !== 'Template') {
       $repeattransactionParams['total_amount'] = $cr['amount'];
-      \Civi::log()->warning("[adyen]: ContributionRecur $cr[id] has a different amount ($cr[currency] $cr[amount]) than the last Completed Contribution ($cn[currency] $cr[amount], ID: $cn[id]). This can cause problems.");
+      // we need to explicitly set payment_instrument_id here, otherwise it will
+      // be taken from the payment *processor* (ignoring the Recur/Template instrument)
+      $repeattransactionParams['payment_instrument_id'] = $cr['payment_instrument_id'];
     }
     $cnPending = civicrm_api3('Contribution', 'repeattransaction', $repeattransactionParams);
 
@@ -226,6 +222,9 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
         'card_type_id'                      => $this->getCardType($result),
         'pan_truncation'                    => $this->getPanTruncation($result),
         'payment_processor_id'              => $paymentProcessorID,
+        // we need to set this explicitly, otherwise core will overwrite with the
+        // payment processor payment instrument
+        'payment_instrument_id'             => $contribution['payment_instrument_id'],
       ];
       $result = civicrm_api3('Payment', 'create', $paymentCreateParams);
       $returnValue = TRUE;
