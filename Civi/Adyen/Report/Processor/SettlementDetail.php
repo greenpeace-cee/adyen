@@ -74,13 +74,13 @@ class SettlementDetail {
   }
 
   protected function processContribution() {
-    $trxn_id = $this->reportLine['content']['Merchant Reference'];
-    if (empty($trxn_id)) {
-      \Civi::log()->warning("[Adyen] Empty trxn_id in report line {$this->reportLine['line_number']}");
+    $merchantReference = $this->reportLine['content']['Merchant Reference'];
+    if (empty($merchantReference)) {
+      \Civi::log()->warning("[Adyen] Empty merchant reference in report line {$this->reportLine['line_number']}");
       return FALSE;
     }
     // TODO: GP specific: contribution_information.*
-    $contribution = Contribution::get()
+    $contribution = Contribution::get(FALSE)
       ->setSelect([
         'id',
         'receive_date',
@@ -92,11 +92,15 @@ class SettlementDetail {
         'contribution_information.cancellation_costs',
         'contribution_information.refund_amount',
       ])
-      ->addWhere('trxn_id', '=', $trxn_id)
+      ->addClause(
+        'OR',
+        ['trxn_id', '=', $merchantReference],
+        ['invoice_id', '=', $merchantReference]
+      )
       ->execute()
       ->first();
     if (empty($contribution)) {
-      \Civi::log()->warning("[Adyen] Unknown contribution with trxn_id {$trxn_id} in report line {$this->reportLine['line_number']}");
+      \Civi::log()->warning("[Adyen] Unknown contribution with merchant reference {$merchantReference} in report line {$this->reportLine['line_number']}");
       return FALSE;
     }
 
@@ -143,7 +147,7 @@ class SettlementDetail {
 
         if (empty($this->reportLine['content']['Gross Debit (GC)'])) {
           \Civi::log()->warning(
-            "[Adyen] Found Chargeback or Refund without Gross Debit (GC) for trxn_id {$trxn_id}"
+            "[Adyen] Found Chargeback or Refund without Gross Debit (GC) for merchant reference {$merchantReference}"
           );
         }
         else {
@@ -165,14 +169,14 @@ class SettlementDetail {
     if (array_key_exists('total_amount', $updateParams)
       && $updateParams['total_amount'] != $contribution['total_amount']) {
       \Civi::log()->warning(
-        "[Adyen] Updating total_amount for trxn_id {$trxn_id}"
+        "[Adyen] Updating total_amount for merchant reference {$merchantReference}"
       );
     }
 
     if (array_key_exists('contribution_status_id', $updateParams)
       && $updateParams['contribution_status_id'] != $contribution['contribution_status_id']) {
       \Civi::log()->info(
-        "[Adyen] Changing contribution_status_id from {$contribution['contribution_status_id']} to {$updateParams['contribution_status_id']} for trxn_id {$trxn_id}"
+        "[Adyen] Changing contribution_status_id from {$contribution['contribution_status_id']} to {$updateParams['contribution_status_id']} for merchant reference {$merchantReference}"
       );
     }
 
@@ -180,13 +184,13 @@ class SettlementDetail {
     if (array_key_exists('contribution_information.refund_amount', $updateParams)
       && $updateParams['contribution_information.refund_amount'] != $contribution['total_amount']) {
       \Civi::log()->warning(
-        "[Adyen] Found Chargeback/Refund with refund amount differing from total_amount for trxn_id {$trxn_id}"
+        "[Adyen] Found Chargeback/Refund with refund amount differing from total_amount for merchant reference {$merchantReference}"
       );
     }
 
-    \Civi::log()->debug("[Adyen] Updating contribution with trxn_id {$trxn_id} from line {$this->reportLine['line_number']}");
+    \Civi::log()->debug("[Adyen] Updating contribution with merchant reference {$merchantReference} from line {$this->reportLine['line_number']}");
 
-    Contribution::update()
+    Contribution::update(FALSE)
       ->addWhere('id', '=', $contribution['id'])
       ->setValues($updateParams)
       ->execute();
@@ -197,7 +201,7 @@ class SettlementDetail {
     if (empty($this->reportLine['id'])) {
       throw new \Exception('Cannot update AdyenReportLine without ID');
     }
-    AdyenReportLine::update()
+    AdyenReportLine::update(FALSE)
       ->addWhere('id', '=', $this->reportLine['id'])
       ->addValue('status_id', \CRM_Core_PseudoConstant::getKey(
         'CRM_Adyen_BAO_AdyenReportLine',

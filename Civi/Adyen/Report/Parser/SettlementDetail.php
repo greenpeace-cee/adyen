@@ -81,7 +81,7 @@ class SettlementDetail {
 
   public function store() {
     foreach ($this->data as $lineNumber => $row) {
-      AdyenReportLine::create()
+      AdyenReportLine::create(FALSE)
         ->addValue('line_number', $lineNumber + 1)
         ->addValue('line_date', $row['Creation Date'])
         ->addValue('content', $row)
