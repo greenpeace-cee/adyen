@@ -162,7 +162,9 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
       ],
       'reference'     => $contribution['invoice_id'],
       'paymentMethod' => [
-        'type'                  => 'scheme',
+        // this is optional - skipping it means we don't have to bother mapping
+        // Civi payment instruments to adyen payment types
+        // 'type'                  => 'scheme',
         'storedPaymentMethodId' => $recurAndToken['payment_token.token'],
       ],
       // The following key is included in the example in the Adyen docs, but
