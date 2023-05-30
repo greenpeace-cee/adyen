@@ -31,6 +31,8 @@ class CRM_Adyen_Webhook {
    * @throws \CiviCRM_API3_Exception
    */
   public function check(array &$messages, bool $attemptFix = FALSE) {
+    // TODO: fix and re-enable
+    return;
     $env = \Civi::settings()->get('environment');
     if ($env && $env !== 'Production') {
       return;
