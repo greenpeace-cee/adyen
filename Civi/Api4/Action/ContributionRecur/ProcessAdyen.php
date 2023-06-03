@@ -109,8 +109,8 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     // Pre-checks to ensure that repeattransaction will work.
     $cn = CRM_Contribute_BAO_ContributionRecur::getTemplateContribution($cr['id']);
     if (empty($cn)) {
-      // @todo implement some handling.
-      throw new CRM_Core_Exception("getTemplateContribution failed for ContributionRecur $cr[id]");
+      $this->generateTemplateContribution($cr);
+      $cn = CRM_Contribute_BAO_ContributionRecur::getTemplateContribution($cr['id']);
     }
     $cnStatus = CRM_Contribute_BAO_Contribution::buildOptions('contribution_status_id', 'validate')[$cn['contribution_status_id']];
     switch ($cnStatus) {
@@ -122,8 +122,8 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
         \Civi::log()->warning("[adyen]: ContributionRecur $cr[id] is due for another Contribution ($cnDate), but there is already a pending one (id:$cn[id], $cn[receive_date]). We will not create another pending contribution until that one is Completed.");
         return 0;
       default:
-        // @todo implement some handling.
-        throw new CRM_Core_Exception("Failed to find a suitable contribution to copy to create next scheduled contribution on ContributionRecur $cr[id]. getTemplateContribution returned one in status '$cnStatus'");
+        $this->generateTemplateContribution($cr);
+        $cn = CRM_Contribute_BAO_ContributionRecur::getTemplateContribution($cr['id']);
     }
 
     // @see docs/discussion/index.md
@@ -316,4 +316,22 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     }
     return NULL;
   }
+
+  private function generateTemplateContribution(array $cr): ?array {
+    \Civi::log()->notice("[adyen] Creating Template contribution for ContributionRecur {$cr['id']}");
+    return Contribution::create(FALSE)
+      ->addValue('is_template', TRUE)
+      ->addValue('contact_id', $cr['contact_id'])
+      ->addValue('financial_type_id', $cr['financial_type_id'])
+      ->addValue('payment_instrument_id', $cr['payment_instrument_id'])
+      ->addValue('total_amount', $cr['amount'])
+      ->addValue('currency', $cr['currency'])
+      ->addValue('contribution_recur_id', $cr['id'])
+      ->addValue('campaign_id', $cr['campaign_id'])
+      ->addValue('contribution_status_id:name', 'Template')
+      ->addValue('is_email_receipt', FALSE)
+      ->execute()
+      ->first();
+  }
+
 }
