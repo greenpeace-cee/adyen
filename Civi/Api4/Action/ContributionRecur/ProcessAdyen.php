@@ -19,8 +19,8 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
    */
   public function _run(Result $result) {
 
-    // Try to get a server-wide lock for this process, be patient for 90s.
-    $lock = new CRM_Core_Lock('worker.contribute.processadyen', 90, TRUE);
+    // Try to get a lock for this process, be patient for 90s.
+    $lock = new CRM_Core_Lock('worker.contribute.processadyen', 90);
     $lock->acquire();
     if (!$lock->isAcquired()) {
       throw new CRM_Core_Exception("Failed to get a lock to process Adyen contributions. Try later.");
