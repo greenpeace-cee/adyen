@@ -18,15 +18,16 @@
   <version>0.2-beta.5</version>
   <develStage>beta</develStage>
   <compatibility>
-    <ver>5.51</ver>
+    <ver>5.69</ver>
   </compatibility>
   <comments/>
   <classloader>
     <psr4 prefix="Civi\" path="Civi"/>
+    <psr0 prefix="CRM_" path="."/>
   </classloader>
   <civix>
     <namespace>CRM/Adyen</namespace>
-    <format>22.05.2</format>
+    <format>23.02.1</format>
   </civix>
   <requires>
     <ext>mjwshared</ext>
@@ -35,5 +36,8 @@
     <mixin>menu-xml@1.0.0</mixin>
     <mixin>mgd-php@1.0.0</mixin>
     <mixin>setting-php@1.0.0</mixin>
+    <mixin>smarty-v2@1.0.1</mixin>
+    <mixin>entity-types-php@1.0.0</mixin>
   </mixins>
+  <upgrader>CRM_Adyen_Upgrader</upgrader>
 </extension>

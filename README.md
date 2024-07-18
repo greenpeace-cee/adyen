@@ -1,6 +1,6 @@
 # Adyen Payment Processor
 
-[![CircleCI](https://circleci.com/gh/greenpeace-cee/adyen.svg?style=svg)](https://circleci.com/gh/greenpeace-cee/adyen)
+[![Run unit tests](https://github.com/greenpeace-cee/adyen/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/greenpeace-cee/adyen/actions/workflows/unit-tests.yml)
 
 CiviCRM payment processor for integration with [Adyen](https://www.adyen.com/).
 
