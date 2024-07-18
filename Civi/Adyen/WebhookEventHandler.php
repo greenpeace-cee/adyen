@@ -157,6 +157,16 @@ class WebhookEventHandler {
     return $this->eventData['amount']['currency'];
   }
 
+  private function extractName(string $name): array {
+    $name = trim($name);
+    $last_name = (strpos($name, ' ') === FALSE) ? NULL : preg_replace('#.*\s([\w-]*)$#', '$1', $name);
+    $first_name = trim(preg_replace('#' . preg_quote($last_name ?? '','#') . '#', '', $name));
+    if (empty($first_name)) {
+      $first_name = NULL;
+    }
+    return [$first_name, $last_name];
+  }
+
   /**
    * Get the contact ID from the event using the shopperEmail / shopperName
    * Match to existing contact or create new contact with the details provided
@@ -167,10 +177,9 @@ class WebhookEventHandler {
     $event = $this->eventData;
     $email = $event['additionalData']['shopperEmail'] ?? NULL;
     //  [shopperName] => [first name=Ivan, infix=null, last name=Velasquez, gender=null]
-    preg_match('/\[first name=([^,]*)/', $event['additionalData']['shopperName'] ?? '', $firstName);
-    $firstName = $firstName[1] ?? NULL;
-    preg_match('/\last name=([^,]*)/', $event['additionalData']['shopperName'] ?? '' ?? '', $lastName);
-    $lastName = $lastName[1] ?? NULL;
+    $name = $this->extractName($event['additionalData']['shopperName'] ?? '');
+    $firstName = $name[0] ?? NULL;
+    $lastName = $name[1] ?? NULL;
 
     $contact = Contact::get(FALSE)
       ->addWhere('contact_type:name', '=', 'Individual');

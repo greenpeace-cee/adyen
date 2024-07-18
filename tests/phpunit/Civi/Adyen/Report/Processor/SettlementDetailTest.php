@@ -126,9 +126,9 @@ class Civi_Adyen_Report_Processor_SettlementDetailTest extends \PHPUnit\Framewor
     // Test 1: Status=Settled
     $contribution = Contribution::create()
       ->addValue('contact_id', $this->contact['id'])
-      ->addValue('financial_type_id', 1)
+      ->addValue('financial_type_id:name', 'Donation')
       ->addValue('total_amount', 45)
-      ->addValue('contribution_status_id', 5)
+      ->addValue('contribution_status_id:name', 'Completed')
       ->addValue('trxn_id', 'TEST-REF-123')
       ->execute()
       ->first();
