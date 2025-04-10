@@ -239,7 +239,7 @@ class WebhookEventHandler {
 
     // The authorization for the card was successful so we create a contribution if we don't already have one.
     $contribution = Contribution::get(FALSE)
-      ->addSelect('id', 'contact_id', 'contribution_recur_id', 'invoice_id', 'trxn_id')
+      ->addSelect('id', 'contact_id', 'contribution_recur_id', 'invoice_id', 'trxn_id', 'receive_date')
       ->addWhere('invoice_id', '=', $invoiceID)
       ->addWhere('is_test', 'IN', [0, 1])
       ->execute()
@@ -317,6 +317,10 @@ class WebhookEventHandler {
       }
 
       if (!empty($updates)) {
+        Contribution::update(FALSE)
+          ->addWhere('id', '=', $contribution['id'])
+          ->setValues($updates)
+          ->execute();
         $message .= " Updated contribution details " . json_encode($updates) . " from original: " . json_encode($contribution);
       }
     }
@@ -374,7 +378,7 @@ class WebhookEventHandler {
 
     // Reload the contribution.
     $contribution = Contribution::get(FALSE)
-    ->addSelect('id', 'contact_id', 'contribution_recur_id', 'invoice_id', 'trxn_id')
+    ->addSelect('id', 'contact_id', 'contribution_recur_id', 'invoice_id', 'trxn_id', 'receive_date')
       ->addWhere('id', '=', $contribution['id'])
       ->addWhere('is_test', 'IN', [0, 1])
       ->execute()

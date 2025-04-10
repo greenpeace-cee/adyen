@@ -73,7 +73,7 @@ jobs:
           PATH="/home/runner/buildkit/bin:$PATH"
           cd "$EXT_DIR"
           cp -R "$GITHUB_WORKSPACE/adyen" "$EXT_DIR/adyen"
-          git clone https://lab.civicrm.org/extensions/mjwshared.git
+          git clone https://github.com/greenpeace-cee/mjwshared.git
           cv en adyen
       - id: run-tests
         name: "Run Tests"
