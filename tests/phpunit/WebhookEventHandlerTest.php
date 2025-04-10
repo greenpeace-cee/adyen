@@ -121,8 +121,8 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
     $handler = new \Civi\Adyen\WebhookEventHandler($eventData);
     $result = $handler->run();
     $this->assertInstanceOf(stdClass::class, $result);
-    $this->assertEquals('success', $result->status);
     $this->assertNull($result->exception);
+    $this->assertEquals('success', $result->status);
 
     $this->assertEquals(1, preg_match('/^OK\. Created new contribution (\d+), invoice_id civi-mock-ref-1, trxn_id TQ9J3F3J7G9WHD82\./', $result->message, $matches));
 
@@ -197,8 +197,8 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
     $handler = new \Civi\Adyen\WebhookEventHandler($eventData);
     $result = $handler->run();
     $this->assertInstanceOf(stdClass::class, $result);
-    $this->assertEquals('success', $result->status);
     $this->assertNull($result->exception);
+    $this->assertEquals('success', $result->status);
 
     $this->assertStringStartsWith("OK. Matched existing contribution $cnID, invoice_id civi-mock-ref-1, trxn_id TQ9J3F3J7G9WHD82. Updated payment token details", $result->message);
 
@@ -208,6 +208,14 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
     ->execute()->single();
     $this->assertEquals('Visa: 1142', $token['masked_account_number']);
     $this->assertEquals('2030-03-31 23:59:00', $token['expiry_date']);
+
+    // load contribution to verify receive_date has been updated
+    $contribution = \Civi\Api4\Contribution::get(FALSE)
+      ->addSelect('receive_date')
+      ->addWhere('id', '=', $cnID)
+      ->execute()
+      ->first();
+    $this->assertEquals(\CRM_Utils_Date::processDate($eventData['eventDate']), \CRM_Utils_Date::processDate($contribution['receive_date']));
 
     // Repeat the webhook call - no updates should occur.
     $handler = new \Civi\Adyen\WebhookEventHandler($eventData);

@@ -239,7 +239,7 @@ class WebhookEventHandler {
 
     // The authorization for the card was successful so we create a contribution if we don't already have one.
     $contribution = Contribution::get(FALSE)
-      ->addSelect('id', 'contact_id', 'contribution_recur_id', 'invoice_id', 'trxn_id')
+      ->addSelect('id', 'contact_id', 'contribution_recur_id', 'invoice_id', 'trxn_id', 'receive_date')
       ->addWhere('invoice_id', '=', $invoiceID)
       ->addWhere('is_test', 'IN', [0, 1])
       ->execute()
@@ -264,7 +264,7 @@ class WebhookEventHandler {
       $this->contactID = $contribution['contact_id'];
       $message = "OK. Matched existing contribution";
     }
-    $message .= " $contribution[id], invoice_id $contribution[invoice_id], trxn_id $contribution[trxn_id].";
+    $message .= " {$contribution['id']}, invoice_id {$contribution['invoice_id']}, trxn_id {$contribution['trxn_id']}.";
 
     // Now we know that we have the contact and the contribution, see if we need to update the payment method details.
     if ( !empty($contribution['contribution_recur_id'])
@@ -289,7 +289,7 @@ class WebhookEventHandler {
 
         if (preg_match('@^(\d\d)/(\d{4})$@', $this->eventData['additionalData']['expiryDate'], $matches)) {
           // cards expire at the end of this month.
-          $expectedExpiry = date('Y-m-d H:i:s', strtotime("$matches[2]-$matches[1]-01 + 1 month - 1 minute"));
+          $expectedExpiry = date('Y-m-d H:i:s', strtotime("{$matches[2]}-{$matches[1]}-01 + 1 month - 1 minute"));
           if ($expectedExpiry !== $result['payment_token_id.expiry_date']) {
             $updates['expiry_date'] = $expectedExpiry;
           }
@@ -301,6 +301,27 @@ class WebhookEventHandler {
           ->execute();
           $message .= " Updated payment token details " . json_encode($updates) . " from original: " . json_encode($result);
         }
+      }
+    }
+
+    if (!empty($contribution)) {
+      $updates = [];
+      // back-date contribution to event date if it's currently set to a later date
+      if (\CRM_Utils_Date::processDate($contribution['receive_date']) > \CRM_Utils_Date::processDate($this->eventData['eventDate'])) {
+        $updates['receive_date'] = \CRM_Utils_Date::processDate($this->eventData['eventDate']);
+      }
+
+      // add pspReference if not present
+      if (empty($contribution['trxn_id'])) {
+        $updates['trxn_id'] = $this->eventData['pspReference'];
+      }
+
+      if (!empty($updates)) {
+        Contribution::update(FALSE)
+          ->addWhere('id', '=', $contribution['id'])
+          ->setValues($updates)
+          ->execute();
+        $message .= " Updated contribution details " . json_encode($updates) . " from original: " . json_encode($contribution);
       }
     }
 
@@ -357,7 +378,7 @@ class WebhookEventHandler {
 
     // Reload the contribution.
     $contribution = Contribution::get(FALSE)
-    ->addSelect('id', 'contact_id', 'contribution_recur_id', 'invoice_id', 'trxn_id')
+    ->addSelect('id', 'contact_id', 'contribution_recur_id', 'invoice_id', 'trxn_id', 'receive_date')
       ->addWhere('id', '=', $contribution['id'])
       ->addWhere('is_test', 'IN', [0, 1])
       ->execute()
