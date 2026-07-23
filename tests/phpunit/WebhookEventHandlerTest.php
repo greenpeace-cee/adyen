@@ -26,6 +26,9 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
   /** @var array holds the data for the test mode processor */
   public array $testModePaymentProcessorConfig;
 
+  /** @var \CRM_Core_Payment_Adyen */
+  public \CRM_Core_Payment_Adyen $testModePaymentProcessorObject;
+
   /**
    * Setup used when HeadlessInterface is implemented.
    *
