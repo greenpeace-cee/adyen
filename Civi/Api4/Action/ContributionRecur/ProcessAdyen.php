@@ -180,7 +180,6 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     ->addJoin('Contact AS ct', 'INNER', NULL,
       ['contact_id', '=', 'ct.id'],
       ['ct.is_deleted', '=', FALSE],
-      ['ct.is_deceased', '=', FALSE],
     )
     ->addWhere('contribution_status_id:name', '=', 'Pending')
     ->execute();
