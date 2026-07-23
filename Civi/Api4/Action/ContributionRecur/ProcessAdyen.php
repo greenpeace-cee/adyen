@@ -138,10 +138,10 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
     if ($cnStatus !== 'Template') {
       $repeattransactionParams['total_amount'] = $cr['amount'];
       $repeattransactionParams['currency'] = $cr['currency'];
-      // we need to explicitly set payment_instrument_id here, otherwise it will
-      // be taken from the payment *processor* (ignoring the Recur/Template instrument)
-      $repeattransactionParams['payment_instrument_id'] = $cr['payment_instrument_id'];
     }
+    // we need to explicitly set payment_instrument_id here, otherwise it will
+    // be taken from the payment *processor* (ignoring the Recur/Template instrument)
+    $repeattransactionParams['payment_instrument_id'] = $cr['payment_instrument_id'];
     $cnPending = civicrm_api3('Contribution', 'repeattransaction', $repeattransactionParams);
 
     /** @var CRM_Core_Payment_Adyen $paymentProcessor */
