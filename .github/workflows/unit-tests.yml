@@ -10,8 +10,10 @@ jobs:
   tests:
     uses: greenpeace-cee/civi-ci/.github/workflows/tests.yml@main
     with:
+      civicrm: '["6.20", "master"]'
+      php: '["8.5"]'
       dependencies: |
-        https://github.com/greenpeace-cee/mjwshared.git
+        https://lab.civicrm.org/extensions/mjwshared.git 1.8.0
       install-script: |
         composer install --working-dir="$EXT_DIR/$EXTENSION" --no-dev
         cv en "$EXTENSION"

@@ -171,7 +171,7 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
         'contact_id'                   => $this->contactID,
         'amount'                       => '1.23',
         'currency'                     => 'EUR',
-        'financial_type_id'            => 1,
+        'financial_type_id:name'       => 'Donation',
         'frequency_unit'               => 'month',
         'frequency_interval'           => 1,
         'next_sched_contribution_date' => 'today',
@@ -196,7 +196,7 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
       'trxn_id'                => 'CiviCRM-test-20220809023627',
       'is_test'                => TRUE,
       'receive_date'           => $dateOfFirstContribution,
-      'financial_type_id'      => 1,
+      'financial_type_id'      => 'Donation',
       'contact_id'             => $this->contactID,
     ])['id'] ?? NULL;
 
@@ -263,7 +263,7 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
         'contribution_status'   => 'Pending',
         'is_test'               => 1,
         'contribution_recur_id' => $this->crID,
-        'financial_type_id'     => 1,
+        'financial_type'        => 'Donation',
         'invoice_id'            => "CiviCRM-cn{$newContributionID}-cr{$this->crID}",
       ];
       foreach ($expectations as $key => $value) {
@@ -625,12 +625,12 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
    */
   public function testAttemptPaymentRoundsAmount(): void {
     $this->testModePaymentProcessorObject->mocks = [
-      \Adyen\Service\Checkout::class => function() {
-        $m = $this->createMock(\Adyen\Service\Checkout::class);
+      \Adyen\Service\Checkout\PaymentsApi::class => function() {
+        $m = $this->createMock(\Adyen\Service\Checkout\PaymentsApi::class);
         $m->expects($this->once())
           ->method('payments')
-          ->with($this->callback(fn($params) => $params['amount']['value'] === 1999))
-          ->willReturn(['resultCode' => 'Authorised']);
+          ->with($this->callback(fn($request) => $request->toArray()['amount']['value'] === 1999))
+          ->willReturn(new \Adyen\Model\Checkout\PaymentResponse(['resultCode' => 'Authorised']));
         return $m;
       },
     ];
@@ -641,6 +641,41 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
       'currency' => 'EUR',
       'invoice_id' => 'test',
     ]);
+  }
+
+  /**
+   * The payment request as sent through the Adyen library.
+   */
+  public function testAttemptPaymentRequest(): void {
+    $this->mockAdyenHttpClient('/payments', [
+      'amount' => ['currency' => 'EUR', 'value' => 123],
+      'merchantAccount' => 'fake_test_api_user',
+      'paymentMethod' => ['storedPaymentMethodId' => '1234567890'],
+      'recurringProcessingModel' => 'Subscription',
+      'reference' => 'test',
+      'shopperInteraction' => 'ContAuth',
+      'shopperReference' => 'TEST_SHOPPER_REF',
+    ], ['resultCode' => 'Authorised', 'pspReference' => 'DummyPspRef1']);
+    $result = $this->testModePaymentProcessorObject->attemptPayment([
+      'id' => $this->cn1ID,
+      'contribution_recur_id' => $this->crID,
+      'total_amount' => 1.23,
+      'currency' => 'EUR',
+      'invoice_id' => 'test',
+    ]);
+    $this->assertEquals(['resultCode' => 'Authorised', 'pspReference' => 'DummyPspRef1', 'success' => TRUE], $result);
+  }
+
+  public function testGetAdyenPaymentMethod(): void {
+    $this->mockAdyenHttpClient('/paymentMethods', [
+      'merchantAccount' => 'fake_test_api_user',
+      'shopperReference' => 'TEST_SHOPPER_REF',
+    ], ['storedPaymentMethods' => [['id' => '1234567890']]]);
+    $result = \Civi\Api4\PaymentToken::getAdyenPaymentMethod(FALSE)
+      ->setPaymentProcessorId($this->testModePaymentProcessorConfig['id'])
+      ->setShopperReference('TEST_SHOPPER_REF')
+      ->execute();
+    $this->assertEquals([['id' => '1234567890']], $result->getArrayCopy());
   }
 
   protected function assertFailedContribution(array $result, $cancelReason = NULL) {
@@ -681,20 +716,36 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     $this->testModePaymentProcessorObject->setMockAdyenClient($mock);
 
     $this->testModePaymentProcessorObject->mocks = [
-      \Adyen\Service\Checkout::class => function($constructorArgs) use ($result) {
-        $m = $this->createMock(\Adyen\Service\Checkout::class);
+      \Adyen\Service\Checkout\PaymentsApi::class => function($constructorArgs) use ($result) {
+        $m = $this->createMock(\Adyen\Service\Checkout\PaymentsApi::class);
         if ($result instanceof \Throwable) {
           $m->method('payments')->willThrowException($result);
           return $m;
         }
         $m->method('payments')
-          ->willReturn($result + [
+          ->willReturn(new \Adyen\Model\Checkout\PaymentResponse($result + [
             'resultCode' => 'Authorised',
             'pspReference' => 'DummyPspRef1',
-          ]);
+          ]));
         return $m;
       }
     ];
+  }
+
+  /**
+   * Use the real Adyen library with a mock HTTP client that expects a single request.
+   */
+  protected function mockAdyenHttpClient(string $endpoint, array $expectedParams, array $response): void {
+    $http = $this->createMock(\Adyen\HttpClient\ClientInterface::class);
+    $http->expects($this->once())
+      ->method('requestHttp')
+      ->with($this->anything(), $this->stringEndsWith($endpoint), $this->identicalTo($expectedParams), 'post')
+      ->willReturn($response);
+    $client = new \Adyen\Client();
+    $client->setEnvironment(\Adyen\Environment::TEST);
+    $client->setHttpClient($http);
+    $this->testModePaymentProcessorObject->setMockAdyenClient($client);
+    $this->testModePaymentProcessorObject->mocks = [];
   }
 
 }

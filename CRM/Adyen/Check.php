@@ -25,7 +25,7 @@ class CRM_Adyen_Check {
   /**
    * @var string
    */
-  const MIN_VERSION_MJWSHARED = '1.2.4';
+  const MIN_VERSION_MJWSHARED = '1.8.0';
   const MIN_VERSION_FIREWALL = '1.5.1';
 
   /**
@@ -49,7 +49,6 @@ class CRM_Adyen_Check {
   public function checkRequirements() {
     $this->checkExtensionMjwshared();
     $this->checkExtensionFirewall();
-    $this->checkWebhooks();
     return $this->messages;
   }
 
@@ -163,14 +162,6 @@ class CRM_Adyen_Check {
     }
     if (isset($extensions['id']) && $extensions['values'][$extensions['id']]['status'] === 'installed') {
       $this->requireExtensionMinVersion($extensionName, CRM_Adyen_Check::MIN_VERSION_FIREWALL, $extensions['values'][$extensions['id']]['version']);
-    }
-  }
-
-  private function checkWebhooks() {
-    // If we didn't install mjwshared yet check requirements but don't crash when checking webhooks
-    if (trait_exists('CRM_Mjwshared_WebhookTrait')) {
-      $webhooks = new CRM_Adyen_Webhook();
-      $webhooks->check($this->messages);
     }
   }
 

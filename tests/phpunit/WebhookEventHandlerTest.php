@@ -22,6 +22,7 @@ use Civi\Test\CiviEnvBuilder;
  */
 class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements HeadlessInterface, HookInterface, TransactionalInterface {
 
+  const HMAC_KEY = '44782DEF547AAA06C910C43932B1EB0C71FC68D9D0C057550C48EC2ACF6BA056';
 
   /** @var array holds the data for the test mode processor */
   public array $testModePaymentProcessorConfig;
@@ -77,8 +78,8 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
           'clientKey' => 'test_DUMMYCLIENTKEY',
           'urlPrefix' => '', // only used for live mode.
           'hmacKeys' => [
-            'SECRET_HMAC_KEY_1',
-            'SECRET_HMAC_KEY_2',
+            '00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF',
+            self::HMAC_KEY,
           ]
         ], JSON_PRETTY_PRINT),
       ],
@@ -138,6 +139,40 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
   }
 
   /**
+   * Test that an unsuccessful AUTHORISED webhook creates nothing, but still
+   * adds the pspReference to a matching contribution.
+   */
+  public function testAuthorisedFailure(): void {
+    $eventData = $this->loadFixtureData('webhook-authorised.json');
+    $eventData['success'] = 'false';
+    $result = (new \Civi\Adyen\WebhookEventHandler($eventData))->run();
+    $this->assertEquals('success', $result->status);
+    $this->assertStringStartsWith('Ignoring Authorization not successful', $result->message);
+
+    $cn = \Civi\Api4\Contribution::get(FALSE)
+      ->selectRowCount()
+      ->addWhere('invoice_id', '=', 'civi-mock-ref-1')
+      ->execute();
+    $this->assertEquals(0, $cn->count(), 'Should not create contribution');
+
+    $cnID = \Civi\Api4\Contribution::create(FALSE)
+      ->setValues([
+        'contact_id' => \Civi\Api4\Contact::create(FALSE)->execute()->single()['id'],
+        'financial_type_id:name' => 'Donation',
+        'total_amount' => 1.01,
+        'contribution_status_id:name' => 'Failed',
+        'invoice_id' => 'civi-mock-ref-1',
+      ])
+      ->execute()->single()['id'];
+    $result = (new \Civi\Adyen\WebhookEventHandler($eventData))->run();
+    $this->assertStringStartsWith("OK. Matched existing contribution $cnID", $result->message);
+    $cn = \Civi\Api4\Contribution::get(FALSE)
+      ->addWhere('id', '=', $cnID)
+      ->execute()->single();
+    $this->assertEquals('TQ9J3F3J7G9WHD82', $cn['trxn_id']);
+  }
+
+  /**
    * Test that a successful AUTHORISED webhook firing against a contribution we already updates expiry and card details.
    *
    */
@@ -165,7 +200,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
         'contact_id'                   => $contactID,
         'amount'                       => '1.23',
         'currency'                     => 'EUR',
-        'financial_type_id'            => 1,
+        'financial_type_id:name'       => 'Donation',
         'frequency_unit'               => 'month',
         'frequency_interval'           => 1,
         'next_sched_contribution_date' => 'today',
@@ -191,7 +226,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
       'trxn_id'                => $eventData['pspReference'],
       'is_test'                => TRUE,
       'receive_date'           => 'today',
-      'financial_type_id'      => 1,
+      'financial_type_id'      => 'Donation',
       'contact_id'             => $contactID,
     ])['id'] ?? NULL;
 
@@ -246,6 +281,63 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
       ->addWhere('invoice_id', '=', 'civi-mock-ref-1')
       ->execute();
     $this->assertEquals(0, $cn->count(), 'Should not create contribution');
+  }
+
+  /**
+   * Test that a signed webhook is queued and processed, and a tampered one is rejected.
+   */
+  public function testIpn(): void {
+    $eventData = $this->loadFixtureData('webhook-authorised.json');
+    $eventData['merchantAccountCode'] = 'fake_test_api_user';
+    $eventData['additionalData']['hmacSignature'] = 'UklV7uFEIFmlrfQctY7jdZo6kw6TjtKTnRxuANAaLaA=';
+    $ipn = new \CRM_Core_Payment_AdyenIPN($this->testModePaymentProcessorObject);
+    $this->assertEquals(200, $ipn->handleRequest([], json_encode(['notificationItems' => [['NotificationRequestItem' => $eventData]]])));
+
+    $webhook = \Civi\Api4\PaymentprocessorWebhook::get(FALSE)
+      ->addWhere('payment_processor_id', '=', $this->testModePaymentProcessorConfig['id'])
+      ->execute()->single();
+    $this->assertEquals('new', $webhook['status']);
+    $this->assertEquals($eventData, json_decode($webhook['data'], TRUE));
+
+    $this->assertTrue($this->testModePaymentProcessorObject->processWebhookEvent($webhook));
+    $webhook = \Civi\Api4\PaymentprocessorWebhook::get(FALSE)
+      ->addWhere('id', '=', $webhook['id'])
+      ->execute()->single();
+    $this->assertEquals('success', $webhook['status']);
+    $this->assertStringStartsWith('OK. Created new contribution', $webhook['message']);
+
+    $eventData['amount']['value'] = 102;
+    $this->expectExceptionMessage('HMAC verification failed');
+    $ipn->parseWebhookRequest(json_encode(['notificationItems' => [['NotificationRequestItem' => $eventData]]]));
+  }
+
+  /**
+   * Test that a signed REPORT_AVAILABLE notification is stored and, not being a
+   * settlement detail report, ignored. A tampered one is rejected.
+   */
+  public function testReportNotification(): void {
+    \Civi::settings()->set('adyen_merchant_config', ['SampleMerchantAccount' => ['hmacKeys' => [self::HMAC_KEY]]]);
+    $item = [
+      'additionalData' => ['hmacSignature' => 'QjsuxgOlI0XLdMqUsb/vU2iJHoh/3Dkn8VZX92TWxZM='],
+      'amount' => ['currency' => 'EUR', 'value' => 0],
+      'eventCode' => 'REPORT_AVAILABLE',
+      'eventDate' => '2020-01-23T16:36:59+01:00',
+      'merchantAccountCode' => 'SampleMerchantAccount',
+      'merchantReference' => '',
+      'pspReference' => 'payments_accounting_report_2020_01_23.csv',
+      'reason' => 'https://ca-test.adyen.com/reports/download/MerchantAccount/SampleMerchantAccount/payments_accounting_report_2020_01_23.csv',
+      'success' => 'true',
+    ];
+    foreach (\Civi\Adyen\Notification\Factory::createFromPayload(['notificationItems' => [['NotificationRequestItem' => $item]]]) as $notification) {
+      $notification->store();
+    }
+    $notification = \Civi\Api4\AdyenNotification::processPending(FALSE)->execute()->single();
+    $this->assertEquals($item, $notification['notification']);
+    $this->assertEquals('ignored', \CRM_Core_PseudoConstant::getName('CRM_Adyen_BAO_AdyenNotification', 'status_id', $notification['status_id']));
+
+    $item['pspReference'] = 'settlement_detail_report_batch_1.csv';
+    $this->expectExceptionMessage('HMAC verification failed');
+    \Civi\Adyen\Notification\Factory::createFromPayload(['notificationItems' => [['NotificationRequestItem' => $item]]]);
   }
 
   protected function loadFixtureData(string $filename) :array {

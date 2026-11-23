@@ -193,9 +193,9 @@ class WebhookEventHandler {
       $contact->addJoin('Email AS email', 'LEFT');
       $contact->addWhere('email.email', '=', $email);
     }
-    $contact = $contact->execute()->first();
-    if (!empty($contact)) {
-      return $contact['id'];
+    $contact = $contact->setLimit(1)->execute()->first();
+    if (!empty($contact) && !empty($email)) {
+      return $this->contactID = $contact['id'];
     }
 
     $newContact = Contact::create(FALSE)
@@ -230,14 +230,9 @@ class WebhookEventHandler {
   public function processAuthorisationEvent() :string {
 
     $trxnID = $this->getPaymentTrxnIDFromEvent();
-    // The authorization for the card was not successful so we ignore it.
-    if (empty($this->eventData['success'])) {
-      throw new WebhookEventIgnoredException('Ignoring Authorization not successful for merchant Reference: ' . $trxnID);
-    }
-
     $invoiceID = $this->getContributionInvoiceIDFromEvent();
 
-    // The authorization for the card was successful so we create a contribution if we don't already have one.
+    // Successful authorizations create a contribution if we don't already have one.
     $contribution = Contribution::get(FALSE)
       ->addSelect('id', 'contact_id', 'contribution_recur_id', 'invoice_id', 'trxn_id', 'receive_date')
       ->addWhere('invoice_id', '=', $invoiceID)
@@ -245,6 +240,10 @@ class WebhookEventHandler {
       ->execute()
       ->first();
     if (empty($contribution)) {
+      // The authorization for the card was not successful so we ignore it.
+      if (!filter_var($this->eventData['success'] ?? FALSE, FILTER_VALIDATE_BOOLEAN)) {
+        throw new WebhookEventIgnoredException('Ignoring Authorization not successful for pspReference: ' . $trxnID);
+      }
       switch ($this->extraConfig['unmatchedContributionBehaviour'] ?? 'create') {
         case 'retry':
           throw new WebhookEventRetryException('Cannot find contribution with invoice_id=' . $invoiceID);
@@ -347,22 +346,6 @@ class WebhookEventHandler {
       // @fixme: This should probably be configurable
       'financial_type_id' => 'Donation',
       'payment_instrument_id' => 'Credit Card',
-      "line_items"  => [
-        // Main (only) group
-        [
-          "params" => [],
-          "line_item" => [
-            // Line items belonging to the group
-            [
-              "qty" => 1,
-              "unit_price" => $amount,
-              "line_total" => $amount,
-              "price_field_id" => 1,
-              "price_field_value_id" => 1,
-            ]
-          ]
-        ]
-      ]
     ];
     $contribution = civicrm_api3('Order', 'create', $orderCreateParams);
 

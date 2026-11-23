@@ -58,7 +58,7 @@ class Factory {
         break;
 
       default:
-        throw new Exception("Unknown value '{$notification['event_code_id']}' for event_code_id");
+        throw new \Exception("Unknown value '{$notification['event_code_id']}' for event_code_id");
     }
     $notificationInstance->setId($notification['id']);
     return $notificationInstance;

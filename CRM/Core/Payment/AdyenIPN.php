@@ -25,22 +25,13 @@ class CRM_Core_Payment_AdyenIPN {
    */
   protected $_paymentProcessor;
 
+  /**
+   * @var array
+   */
+  public $events;
+
   public function __construct(?CRM_Core_Payment_Adyen $paymentObject = NULL) {
     $this->_paymentProcessor = $paymentObject;
-  }
-
-  /**
-   * Returns TRUE if we handle this event type, FALSE otherwise
-   * @param string $eventType
-   *
-   * @return bool
-   */
-  public function setEventType($eventType) {
-    $this->eventType = $eventType;
-    if (!in_array($this->eventType, CRM_Adyen_Webhook::getDefaultEnabledEvents())) {
-      return FALSE;
-    }
-    return TRUE;
   }
 
   /**

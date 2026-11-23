@@ -108,7 +108,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
   }
 
   public function getExtraConfig() {
-    $parsed = json_decode($this->_paymentProcessor['signature'] ?? NULL, TRUE);
+    $parsed = json_decode($this->_paymentProcessor['signature'] ?? '', TRUE);
     return $parsed ?? [];
   }
 
@@ -154,7 +154,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
       Civi::log()->notice("[adyen] attemptPayment is about to submit a payment request against the payment token for ContributionRecur id {$contribution['contribution_recur_id']} (Contribution ID {$contribution['id']}) expired at {$recurAndToken['payment_token.expiry_date']}. This might still succeed due to Adyen’s 'Account updater' feature.");
     }
 
-    $service = $this->adyenFactory(\Adyen\Service\Checkout::class, $this->client);
+    $service = $this->adyenFactory(\Adyen\Service\Checkout\PaymentsApi::class, $this->client);
     $params = [
       'amount'        => [
         'currency' => $contribution['currency'],
@@ -179,7 +179,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
       // 'clientKey'                => $this->getClientKey(),
     ];
 
-    $result = $service->payments($params);
+    $result = $service->payments(new \Adyen\Model\Checkout\PaymentRequest($params))->toArray();
     if (in_array($result['resultCode'] ?? '', ['Received', 'Authorised'])) {
       // Looks good. The caller should store pspReference as a trxn id.
       $result['success'] = TRUE;
@@ -199,11 +199,11 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
    * @throws \Adyen\AdyenException
    */
   public function getStoredPaymentMethod(string $shopperReference) {
-    $checkout = new \Adyen\Service\Checkout($this->client);
-    return $checkout->paymentMethods([
+    $checkout = new \Adyen\Service\Checkout\PaymentsApi($this->client);
+    return $checkout->paymentMethods(new \Adyen\Model\Checkout\PaymentMethodsRequest([
       'merchantAccount' => $this->getMerchantAccount(),
       'shopperReference' => $shopperReference,
-    ]);
+    ]))->toArray();
   }
 
 
@@ -380,7 +380,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
 
   public function createAPISession(\CRM_Core_Form $form) {
     // @fixme lots of params!
-    $service = new \Adyen\Service\Checkout($this->client);
+    $service = new \Adyen\Service\Checkout\PaymentsApi($this->client);
     $params = [
       'amount' => [
         'currency' => "EUR",
@@ -391,7 +391,7 @@ class CRM_Core_Payment_Adyen extends CRM_Core_Payment {
       'reference' => $this->getPaymentReference(),
       'returnUrl' => $this->getReturnSuccessUrl('qfKey'),
     ];
-    $result = $service->sessions($params);
+    $result = $service->sessions(new \Adyen\Model\Checkout\CreateCheckoutSessionRequest($params))->toArray();
     return $result;
   }
 

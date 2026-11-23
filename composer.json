@@ -14,11 +14,7 @@
     }
   ],
   "require": {
-    "adyen/php-api-library": "^11.0"
-  },
-  "config": {
-    "platform": {
-      "php": "7.4"
-    }
+    "php": ">=8.5",
+    "adyen/php-api-library": "^30.1"
   }
 }

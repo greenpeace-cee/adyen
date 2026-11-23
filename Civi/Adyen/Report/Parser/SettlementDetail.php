@@ -63,7 +63,7 @@ class SettlementDetail {
     // remove header
     unset($lines[0]);
     foreach ($lines as $line) {
-      $this->data[] = array_combine($this->columnHeaders, str_getcsv($line));
+      $this->data[] = array_combine($this->columnHeaders, $this->lineToArray($line));
     }
   }
 
