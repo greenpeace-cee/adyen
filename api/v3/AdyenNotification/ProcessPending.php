@@ -31,5 +31,5 @@ function _civicrm_api3_adyen_notification_process_pending_spec(&$spec) {
  * @throws API_Exception
  */
 function civicrm_api3_adyen_notification_process_pending($params) {
-  return civicrm_api3_create_success((array) AdyenNotification::processPending()->execute(), $params, 'AdyenNotification', 'process_pending');
+  return civicrm_api3_create_success((array) AdyenNotification::processPending(FALSE)->execute(), $params, 'AdyenNotification', 'process_pending');
 }

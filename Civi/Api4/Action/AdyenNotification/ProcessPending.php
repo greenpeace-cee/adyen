@@ -28,7 +28,7 @@ class ProcessPending extends \Civi\Api4\Generic\AbstractAction {
     if (!$lock->isAcquired()) {
       throw new \API_Exception('Process is already running.');
     }
-    $adyenNotifications = AdyenNotification::get()
+    $adyenNotifications = AdyenNotification::get(FALSE)
       ->addWhere('status_id', '=', $pendingStatus)
       ->addOrderBy('processing_order', 'ASC')
       ->addOrderBy('event_date', 'ASC')
@@ -38,7 +38,7 @@ class ProcessPending extends \Civi\Api4\Generic\AbstractAction {
       $notification = \Civi\Adyen\Notification\Factory::createFromEntity($adyenNotification);
       $notification->process();
       // refresh and add to results
-      $result[] = AdyenNotification::get()
+      $result[] = AdyenNotification::get(FALSE)
         ->addWhere('id', '=', $adyenNotification['id'])
         ->execute()
         ->first();

@@ -274,7 +274,7 @@ class WebhookEventHandler {
       && !empty($contribution)
       ) {
       // This belongs to a recur, and we have card details.
-      $result = \Civi\Api4\ContributionRecur::get()
+      $result = \Civi\Api4\ContributionRecur::get(FALSE)
       ->addSelect('payment_token_id.id', 'payment_token_id.expiry_date', 'payment_token_id.masked_account_number')
       ->addWhere('id', '=', $contribution['contribution_recur_id'])
       ->execute()->first();

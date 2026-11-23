@@ -137,7 +137,7 @@ class Report {
       'event_code_id',
       'report_available'
     );
-    $firstReceivedNotification = AdyenNotification::get()
+    $firstReceivedNotification = AdyenNotification::get(FALSE)
       ->setSelect([
         'id',
       ])
@@ -156,7 +156,7 @@ class Report {
     if (empty($this->id)) {
       throw new \Exception('Cannot update AdyenNotification without ID');
     }
-    AdyenNotification::update()
+    AdyenNotification::update(FALSE)
       ->addWhere('id', '=', $this->id)
       ->addValue('status_id', \CRM_Core_PseudoConstant::getKey(
         'CRM_Adyen_BAO_AdyenNotification',
@@ -199,7 +199,7 @@ class Report {
   private function storeReport(string $report) {
     $settlementDetailReport = new Parser\SettlementDetail($report);
     // get number of already-stored report lines (should be 0)
-    $adyenReportLineCount = AdyenReportLine::get()
+    $adyenReportLineCount = AdyenReportLine::get(FALSE)
       ->selectRowCount()
       ->addWhere('adyen_notification_id', '=', $this->id)
       ->execute()
@@ -220,12 +220,12 @@ class Report {
 
   private function processReport() {
     $success = TRUE;
-    $notification = AdyenNotification::get()
+    $notification = AdyenNotification::get(FALSE)
       ->addWhere('id', '=', $this->id)
       ->execute()
       ->first();
 
-    $reportLines = AdyenReportLine::get()
+    $reportLines = AdyenReportLine::get(FALSE)
       ->addWhere('adyen_notification_id', '=', $this->id)
       ->addWhere('status_id', '=', 1)
       ->addOrderBy('line_date', 'ASC')

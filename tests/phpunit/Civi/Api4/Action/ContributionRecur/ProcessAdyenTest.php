@@ -580,6 +580,69 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     $this->assertEquals(['newPending' => [], 'contributionsProcessed' => []], $result);
   }
 
+  /**
+   * "PaymentDetail not found" (803) is a failed contribution for PayPal and
+   * a hard failure for anything else.
+   *
+   * @dataProvider dataForPaymentDetailNotFound
+   */
+  public function testPaymentDetailNotFound(string $paymentInstrument, string $errorCode, bool $expectFailedContribution): void {
+    \Civi\Api4\OptionValue::create(FALSE)
+      ->addValue('option_group_id:name', 'payment_instrument')
+      ->addValue('name', 'PayPal')
+      ->addValue('label', 'PayPal')
+      ->execute();
+    ContributionRecur::update(FALSE)
+      ->addValue('payment_instrument_id:name', $paymentInstrument)
+      ->addWhere('id', '=', $this->crID)
+      ->execute();
+    $this->mockAdyenCheckoutPayments(new \Adyen\AdyenException('PaymentDetail not found', 422, NULL, 422, 'validation', NULL, $errorCode));
+
+    if (!$expectFailedContribution) {
+      $this->expectException(\Adyen\AdyenException::class);
+    }
+    $result = ContributionRecur::processAdyen(FALSE)->execute()->getArrayCopy();
+
+    $this->assertFailedContribution($result, 'AD50');
+    $recur = ContributionRecur::get(FALSE)
+      ->addSelect('contribution_status_id:name', 'failure_count')
+      ->addWhere('id', '=', $this->crID)
+      ->execute()->single();
+    $this->assertEquals('Failing', $recur['contribution_status_id:name']);
+    $this->assertEquals(1, $recur['failure_count']);
+  }
+
+  public function dataForPaymentDetailNotFound(): array {
+    return [
+      'PayPal token revoked' => ['PayPal', '803', TRUE],
+      'Credit Card token not found' => ['Credit Card', '803', FALSE],
+      'Other PayPal API error' => ['PayPal', '905', FALSE],
+    ];
+  }
+
+  /**
+   * 19.99 * 100 is 1998.9999999999998 in floating point.
+   */
+  public function testAttemptPaymentRoundsAmount(): void {
+    $this->testModePaymentProcessorObject->mocks = [
+      \Adyen\Service\Checkout::class => function() {
+        $m = $this->createMock(\Adyen\Service\Checkout::class);
+        $m->expects($this->once())
+          ->method('payments')
+          ->with($this->callback(fn($params) => $params['amount']['value'] === 1999))
+          ->willReturn(['resultCode' => 'Authorised']);
+        return $m;
+      },
+    ];
+    $this->testModePaymentProcessorObject->attemptPayment([
+      'id' => $this->cn1ID,
+      'contribution_recur_id' => $this->crID,
+      'total_amount' => 19.99,
+      'currency' => 'EUR',
+      'invoice_id' => 'test',
+    ]);
+  }
+
   protected function assertFailedContribution(array $result, $cancelReason = NULL) {
     $this->assertArrayHasKey('newPending', $result);
     $this->assertArrayHasKey($this->crID, $result['newPending'], "Expect that there is a new contribution created for the CR but none was.");
@@ -603,7 +666,10 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
 
   }
 
-  protected function mockAdyenCheckoutPayments(array $result) {
+  /**
+   * @param array|\Throwable $result payments() response overrides, or an exception to throw
+   */
+  protected function mockAdyenCheckoutPayments($result) {
     $mockConfig = $this->createMock(\Adyen\Config::class);
     $map = [
       ['environment', \Adyen\Environment::TEST],
@@ -617,6 +683,10 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     $this->testModePaymentProcessorObject->mocks = [
       \Adyen\Service\Checkout::class => function($constructorArgs) use ($result) {
         $m = $this->createMock(\Adyen\Service\Checkout::class);
+        if ($result instanceof \Throwable) {
+          $m->method('payments')->willThrowException($result);
+          return $m;
+        }
         $m->method('payments')
           ->willReturn($result + [
             'resultCode' => 'Authorised',
