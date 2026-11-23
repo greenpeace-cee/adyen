@@ -134,7 +134,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       'is_test'                  => $cr['is_test'],
     ];
     // unless there is a contribution template for this Recur, use the amount
-    // and payment instrument from the Recur
+    // and currency from the Recur
     if ($cnStatus !== 'Template') {
       $repeattransactionParams['total_amount'] = $cr['amount'];
       $repeattransactionParams['currency'] = $cr['currency'];
@@ -214,7 +214,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       if ((string) $e->getAdyenErrorCode() !== '803' || ($contribution['payment_instrument_id:name'] ?? NULL) !== 'PayPal') {
         throw $e;
       }
-      $result = ['success' => FALSE, 'refusalReasonCode' => '50','refusalReason' => $e->getMessage()];
+      $result = ['success' => FALSE, 'refusalReasonCode' => '50', 'refusalReason' => $e->getMessage()];
     }
     $returnValue = NULL;
     if ($result['success'] ?? FALSE) {

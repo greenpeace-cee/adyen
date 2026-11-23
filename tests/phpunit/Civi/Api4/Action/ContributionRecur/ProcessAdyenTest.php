@@ -620,6 +620,29 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     ];
   }
 
+  /**
+   * 19.99 * 100 is 1998.9999999999998 in floating point.
+   */
+  public function testAttemptPaymentRoundsAmount(): void {
+    $this->testModePaymentProcessorObject->mocks = [
+      \Adyen\Service\Checkout::class => function() {
+        $m = $this->createMock(\Adyen\Service\Checkout::class);
+        $m->expects($this->once())
+          ->method('payments')
+          ->with($this->callback(fn($params) => $params['amount']['value'] === 1999))
+          ->willReturn(['resultCode' => 'Authorised']);
+        return $m;
+      },
+    ];
+    $this->testModePaymentProcessorObject->attemptPayment([
+      'id' => $this->cn1ID,
+      'contribution_recur_id' => $this->crID,
+      'total_amount' => 19.99,
+      'currency' => 'EUR',
+      'invoice_id' => 'test',
+    ]);
+  }
+
   protected function assertFailedContribution(array $result, $cancelReason = NULL) {
     $this->assertArrayHasKey('newPending', $result);
     $this->assertArrayHasKey($this->crID, $result['newPending'], "Expect that there is a new contribution created for the CR but none was.");
