@@ -25,6 +25,11 @@ class CRM_Core_Payment_AdyenIPN {
    */
   protected $_paymentProcessor;
 
+  /**
+   * @var array
+   */
+  public $events;
+
   public function __construct(?CRM_Core_Payment_Adyen $paymentObject = NULL) {
     $this->_paymentProcessor = $paymentObject;
   }
