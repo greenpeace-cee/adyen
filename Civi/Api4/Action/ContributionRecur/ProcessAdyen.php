@@ -161,8 +161,8 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
    * Process Pending contributions using Adyen API.
    */
   public function processPendingContributions(): array {
-    $contributions = Contribution::get()
-    ->addSelect('*', 'cr.payment_processor_id')
+    $contributions = Contribution::get(FALSE)
+    ->addSelect('*', 'cr.payment_processor_id', 'payment_instrument_id:name')
     ->addWhere('is_test', 'IN', [0, 1])
     // The commented version did not work
     // ->addJoin('ContributionRecur AS cr', 'INNER', NULL,
@@ -194,7 +194,7 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
   /**
    * Process a single contribution using Adyen API.
    *
-   * @param array $contribution (must include cr.payment_processor_id)
+   * @param array $contribution (must include cr.payment_processor_id and payment_instrument_id:name)
    */
   public function processPendingContribution(array $contribution): bool {
     $paymentProcessorID = $contribution['cr.payment_processor_id'];
@@ -205,7 +205,17 @@ class ProcessAdyen extends \Civi\Api4\Generic\AbstractAction
       throw new \RuntimeException("processPendingContribution called with a contribution that is not attached to an Adyen payment processor. This is a bug!");
     }
 
-    $result = $paymentProcessor->attemptPayment($contribution);
+    try {
+      $result = $paymentProcessor->attemptPayment($contribution);
+    }
+    catch (\Adyen\AdyenException $e) {
+      // PayPal tokens revoked by the donor fail with "PaymentDetail not found".
+      // Keep failing hard for other payment methods, where this indicates a bug.
+      if ((string) $e->getAdyenErrorCode() !== '803' || ($contribution['payment_instrument_id:name'] ?? NULL) !== 'PayPal') {
+        throw $e;
+      }
+      $result = ['success' => FALSE, 'refusalReasonCode' => '50','refusalReason' => $e->getMessage()];
+    }
     $returnValue = NULL;
     if ($result['success'] ?? FALSE) {
       // Payment successfully processed; either it is settled or at least authorised. IPNs are relied upon to update further.
