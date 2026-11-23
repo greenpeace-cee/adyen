@@ -643,6 +643,41 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     ]);
   }
 
+  /**
+   * The payment request as sent through the Adyen library.
+   */
+  public function testAttemptPaymentRequest(): void {
+    $this->mockAdyenHttpClient('/payments', [
+      'amount' => ['currency' => 'EUR', 'value' => 123],
+      'merchantAccount' => 'fake_test_api_user',
+      'paymentMethod' => ['storedPaymentMethodId' => '1234567890'],
+      'recurringProcessingModel' => 'Subscription',
+      'reference' => 'test',
+      'shopperInteraction' => 'ContAuth',
+      'shopperReference' => 'TEST_SHOPPER_REF',
+    ], ['resultCode' => 'Authorised', 'pspReference' => 'DummyPspRef1']);
+    $result = $this->testModePaymentProcessorObject->attemptPayment([
+      'id' => $this->cn1ID,
+      'contribution_recur_id' => $this->crID,
+      'total_amount' => 1.23,
+      'currency' => 'EUR',
+      'invoice_id' => 'test',
+    ]);
+    $this->assertEquals(['resultCode' => 'Authorised', 'pspReference' => 'DummyPspRef1', 'success' => TRUE], $result);
+  }
+
+  public function testGetAdyenPaymentMethod(): void {
+    $this->mockAdyenHttpClient('/paymentMethods', [
+      'merchantAccount' => 'fake_test_api_user',
+      'shopperReference' => 'TEST_SHOPPER_REF',
+    ], ['storedPaymentMethods' => [['id' => '1234567890']]]);
+    $result = \Civi\Api4\PaymentToken::getAdyenPaymentMethod(FALSE)
+      ->setPaymentProcessorId($this->testModePaymentProcessorConfig['id'])
+      ->setShopperReference('TEST_SHOPPER_REF')
+      ->execute();
+    $this->assertEquals([['id' => '1234567890']], $result->getArrayCopy());
+  }
+
   protected function assertFailedContribution(array $result, $cancelReason = NULL) {
     $this->assertArrayHasKey('newPending', $result);
     $this->assertArrayHasKey($this->crID, $result['newPending'], "Expect that there is a new contribution created for the CR but none was.");
@@ -695,6 +730,22 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
         return $m;
       }
     ];
+  }
+
+  /**
+   * Use the real Adyen library with a mock HTTP client that expects a single request.
+   */
+  protected function mockAdyenHttpClient(string $endpoint, array $expectedParams, array $response): void {
+    $http = $this->createMock(\Adyen\HttpClient\ClientInterface::class);
+    $http->expects($this->once())
+      ->method('requestHttp')
+      ->with($this->anything(), $this->stringEndsWith($endpoint), $this->identicalTo($expectedParams), 'post')
+      ->willReturn($response);
+    $client = new \Adyen\Client();
+    $client->setEnvironment(\Adyen\Environment::TEST);
+    $client->setHttpClient($http);
+    $this->testModePaymentProcessorObject->setMockAdyenClient($client);
+    $this->testModePaymentProcessorObject->mocks = [];
   }
 
 }
