@@ -25,7 +25,7 @@ class CRM_Adyen_Check {
   /**
    * @var string
    */
-  const MIN_VERSION_MJWSHARED = '1.2.4';
+  const MIN_VERSION_MJWSHARED = '1.8.0';
   const MIN_VERSION_FIREWALL = '1.5.1';
 
   /**
