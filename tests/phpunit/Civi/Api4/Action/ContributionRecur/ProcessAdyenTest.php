@@ -625,12 +625,12 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
    */
   public function testAttemptPaymentRoundsAmount(): void {
     $this->testModePaymentProcessorObject->mocks = [
-      \Adyen\Service\Checkout::class => function() {
-        $m = $this->createMock(\Adyen\Service\Checkout::class);
+      \Adyen\Service\Checkout\PaymentsApi::class => function() {
+        $m = $this->createMock(\Adyen\Service\Checkout\PaymentsApi::class);
         $m->expects($this->once())
           ->method('payments')
-          ->with($this->callback(fn($params) => $params['amount']['value'] === 1999))
-          ->willReturn(['resultCode' => 'Authorised']);
+          ->with($this->callback(fn($request) => $request->toArray()['amount']['value'] === 1999))
+          ->willReturn(new \Adyen\Model\Checkout\PaymentResponse(['resultCode' => 'Authorised']));
         return $m;
       },
     ];
@@ -681,17 +681,17 @@ class ProcessAdyenTest extends \PHPUnit\Framework\TestCase implements HeadlessIn
     $this->testModePaymentProcessorObject->setMockAdyenClient($mock);
 
     $this->testModePaymentProcessorObject->mocks = [
-      \Adyen\Service\Checkout::class => function($constructorArgs) use ($result) {
-        $m = $this->createMock(\Adyen\Service\Checkout::class);
+      \Adyen\Service\Checkout\PaymentsApi::class => function($constructorArgs) use ($result) {
+        $m = $this->createMock(\Adyen\Service\Checkout\PaymentsApi::class);
         if ($result instanceof \Throwable) {
           $m->method('payments')->willThrowException($result);
           return $m;
         }
         $m->method('payments')
-          ->willReturn($result + [
+          ->willReturn(new \Adyen\Model\Checkout\PaymentResponse($result + [
             'resultCode' => 'Authorised',
             'pspReference' => 'DummyPspRef1',
-          ]);
+          ]));
         return $m;
       }
     ];
