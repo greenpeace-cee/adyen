@@ -193,9 +193,9 @@ class WebhookEventHandler {
       $contact->addJoin('Email AS email', 'LEFT');
       $contact->addWhere('email.email', '=', $email);
     }
-    $contact = $contact->execute()->first();
-    if (!empty($contact)) {
-      return $contact['id'];
+    $contact = $contact->setLimit(1)->execute()->first();
+    if (!empty($contact) && !empty($email)) {
+      return $this->contactID = $contact['id'];
     }
 
     $newContact = Contact::create(FALSE)
