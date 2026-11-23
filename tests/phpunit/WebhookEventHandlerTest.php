@@ -165,7 +165,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
         'contact_id'                   => $contactID,
         'amount'                       => '1.23',
         'currency'                     => 'EUR',
-        'financial_type_id'            => 1,
+        'financial_type_id:name'       => 'Donation',
         'frequency_unit'               => 'month',
         'frequency_interval'           => 1,
         'next_sched_contribution_date' => 'today',
@@ -191,7 +191,7 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
       'trxn_id'                => $eventData['pspReference'],
       'is_test'                => TRUE,
       'receive_date'           => 'today',
-      'financial_type_id'      => 1,
+      'financial_type_id'      => 'Donation',
       'contact_id'             => $contactID,
     ])['id'] ?? NULL;
 

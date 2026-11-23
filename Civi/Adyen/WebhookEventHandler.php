@@ -347,22 +347,6 @@ class WebhookEventHandler {
       // @fixme: This should probably be configurable
       'financial_type_id' => 'Donation',
       'payment_instrument_id' => 'Credit Card',
-      "line_items"  => [
-        // Main (only) group
-        [
-          "params" => [],
-          "line_item" => [
-            // Line items belonging to the group
-            [
-              "qty" => 1,
-              "unit_price" => $amount,
-              "line_total" => $amount,
-              "price_field_id" => 1,
-              "price_field_value_id" => 1,
-            ]
-          ]
-        ]
-      ]
     ];
     $contribution = civicrm_api3('Order', 'create', $orderCreateParams);
 
