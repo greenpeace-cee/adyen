@@ -18,8 +18,11 @@
   <version>0.2-beta.5</version>
   <develStage>beta</develStage>
   <compatibility>
-    <ver>5.69</ver>
+    <ver>6.20</ver>
   </compatibility>
+  <php_compatibility>
+    <ver>8.5</ver>
+  </php_compatibility>
   <comments/>
   <classloader>
     <psr4 prefix="Civi\" path="Civi"/>

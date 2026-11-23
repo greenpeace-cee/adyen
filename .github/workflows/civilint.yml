@@ -10,3 +10,5 @@ permissions:
 jobs:
   civilint:
     uses: greenpeace-cee/civi-ci/.github/workflows/civilint.yml@main
+    with:
+      php: '8.5'
