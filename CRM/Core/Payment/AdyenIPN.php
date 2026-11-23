@@ -35,20 +35,6 @@ class CRM_Core_Payment_AdyenIPN {
   }
 
   /**
-   * Returns TRUE if we handle this event type, FALSE otherwise
-   * @param string $eventType
-   *
-   * @return bool
-   */
-  public function setEventType($eventType) {
-    $this->eventType = $eventType;
-    if (!in_array($this->eventType, CRM_Adyen_Webhook::getDefaultEnabledEvents())) {
-      return FALSE;
-    }
-    return TRUE;
-  }
-
-  /**
    * Set and initialise the paymentProcessor object
    * @param int $paymentProcessorID
    *

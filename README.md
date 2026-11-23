@@ -55,8 +55,6 @@ Then you need to add a JSON-formatted configuration for the other parameters:
 - The payment "dropin" for taking payments directly in CiviCRM is not fully implemented because it was not a client requirement.
 Currently it loads with a fixed amount (EUR 10).
 
-- The webhook checks do not work - it is supposed to authorize using the X-API-Key but returns 401 unauthorized when getting the list of webhooks.
-
 - We currently *only* process the `AUTHORISATION` and `SETTLEMENT_REPORT` webhooks.
 - In Adyen dashboard -> Webhooks there is a "Settings" button.
   Click on that to enable "Delayed Capture" notifications so that we can process "CAPTURE" notifications.
@@ -68,7 +66,7 @@ See https://docs.adyen.com/account/manage-payments
 
 ## Setup Adyen Webhook notifications
 
-You have to setup the webhook manually for now (see Known Issues).
+You have to setup the webhook manually.
 
 1. Add a "standard notification" with a CiviCRM webhook URL (eg. https://example.org/civicrm/payment/ipn/26) where 26 is your payment processor ID in CiviCRM.
 2. Set "Merchant Accounts" to include only the merchant account you are interested in processing (setup a separate payment processor in CiviCRM for each merchant account).
