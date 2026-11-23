@@ -139,6 +139,40 @@ class WebhookEventHandlerTest extends \PHPUnit\Framework\TestCase implements Hea
   }
 
   /**
+   * Test that an unsuccessful AUTHORISED webhook creates nothing, but still
+   * adds the pspReference to a matching contribution.
+   */
+  public function testAuthorisedFailure(): void {
+    $eventData = $this->loadFixtureData('webhook-authorised.json');
+    $eventData['success'] = 'false';
+    $result = (new \Civi\Adyen\WebhookEventHandler($eventData))->run();
+    $this->assertEquals('success', $result->status);
+    $this->assertStringStartsWith('Ignoring Authorization not successful', $result->message);
+
+    $cn = \Civi\Api4\Contribution::get(FALSE)
+      ->selectRowCount()
+      ->addWhere('invoice_id', '=', 'civi-mock-ref-1')
+      ->execute();
+    $this->assertEquals(0, $cn->count(), 'Should not create contribution');
+
+    $cnID = \Civi\Api4\Contribution::create(FALSE)
+      ->setValues([
+        'contact_id' => \Civi\Api4\Contact::create(FALSE)->execute()->single()['id'],
+        'financial_type_id:name' => 'Donation',
+        'total_amount' => 1.01,
+        'contribution_status_id:name' => 'Failed',
+        'invoice_id' => 'civi-mock-ref-1',
+      ])
+      ->execute()->single()['id'];
+    $result = (new \Civi\Adyen\WebhookEventHandler($eventData))->run();
+    $this->assertStringStartsWith("OK. Matched existing contribution $cnID", $result->message);
+    $cn = \Civi\Api4\Contribution::get(FALSE)
+      ->addWhere('id', '=', $cnID)
+      ->execute()->single();
+    $this->assertEquals('TQ9J3F3J7G9WHD82', $cn['trxn_id']);
+  }
+
+  /**
    * Test that a successful AUTHORISED webhook firing against a contribution we already updates expiry and card details.
    *
    */

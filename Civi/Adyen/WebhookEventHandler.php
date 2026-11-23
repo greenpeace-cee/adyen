@@ -230,14 +230,9 @@ class WebhookEventHandler {
   public function processAuthorisationEvent() :string {
 
     $trxnID = $this->getPaymentTrxnIDFromEvent();
-    // The authorization for the card was not successful so we ignore it.
-    if (empty($this->eventData['success'])) {
-      throw new WebhookEventIgnoredException('Ignoring Authorization not successful for merchant Reference: ' . $trxnID);
-    }
-
     $invoiceID = $this->getContributionInvoiceIDFromEvent();
 
-    // The authorization for the card was successful so we create a contribution if we don't already have one.
+    // Successful authorizations create a contribution if we don't already have one.
     $contribution = Contribution::get(FALSE)
       ->addSelect('id', 'contact_id', 'contribution_recur_id', 'invoice_id', 'trxn_id', 'receive_date')
       ->addWhere('invoice_id', '=', $invoiceID)
@@ -245,6 +240,10 @@ class WebhookEventHandler {
       ->execute()
       ->first();
     if (empty($contribution)) {
+      // The authorization for the card was not successful so we ignore it.
+      if (!filter_var($this->eventData['success'] ?? FALSE, FILTER_VALIDATE_BOOLEAN)) {
+        throw new WebhookEventIgnoredException('Ignoring Authorization not successful for pspReference: ' . $trxnID);
+      }
       switch ($this->extraConfig['unmatchedContributionBehaviour'] ?? 'create') {
         case 'retry':
           throw new WebhookEventRetryException('Cannot find contribution with invoice_id=' . $invoiceID);
